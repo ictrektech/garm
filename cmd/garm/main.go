@@ -367,7 +367,16 @@ func main() {
 	// Serve the whole API (including /ui) under the configured prefix.
 	var handler http.Handler = router
 	if basePath := cfg.APIServer.WebUI.GetBasePath(); basePath != "" {
-		handler = http.StripPrefix(basePath, router)
+		stripped := http.StripPrefix(basePath, router)
+		publicPath := cfg.APIServer.WebUI.GetPublicWebappPath()
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// StripPrefix turns this into an empty path, which mux redirects to "/".
+			if r.URL.Path == basePath {
+				http.Redirect(w, r, publicPath, http.StatusMovedPermanently)
+				return
+			}
+			stripped.ServeHTTP(w, r)
+		})
 	}
 
 	srv := &http.Server{
