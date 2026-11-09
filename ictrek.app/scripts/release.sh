@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
-# 本地发布：算版本、出镜像、出包、建 tag，然后打印推送命令。
+# 本地发布：算版本、出镜像、出包、建 tag、发飞书，然后打印推送命令。
 # 不推送 git，推送由人执行。推 tag 会触发 .github/workflows/vos-release.yml。
 #
-# 用法：release.sh [--skip-image] [--dry-run]
-#   --skip-image  镜像已推送，只校验并出包
-#   --dry-run     只算版本并出包，跳过镜像校验与 tag，用于预览包内容
+# 用法：release.sh [--no-push] [--no-feishu] [--dry-run]
+#   --no-push    只构建本地镜像，不推送仓库；打出的包引用本地 tag
+#   --no-feishu  不发飞书通知
+#   --dry-run    只出包，跳过镜像与 tag，用于预览
+# 环境：
+#   FEISHU_WEBHOOK  飞书机器人 webhook 地址，未设置时跳过通知
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "${script_dir}" rev-parse --show-toplevel)"
 
-skip_image=0
+no_push=0
+no_feishu=0
 dry_run=0
 
 die() { echo "release.sh: $*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --skip-image) skip_image=1; shift ;;
+    --no-push) no_push=1; shift ;;
+    --no-feishu) no_feishu=1; shift ;;
     --dry-run) dry_run=1; shift ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -34,7 +39,7 @@ git fetch --no-tags --force origin 'refs/tags/*:refs/tags/*' >/dev/null 2>&1 \
 
 eval "$("${script_dir}/version.sh")"
 tag="vos-garm-v${VERSION}"
-image="${IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm}:${IMAGE_TAG}"
+image_repo="${IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm}"
 branch="$(git branch --show-current)"
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
@@ -43,16 +48,16 @@ fi
 
 if (( dry_run )); then
   echo "release.sh: dry run, skipping image build and tag"
+elif (( no_push )); then
+  "${script_dir}/build_image.sh" --no-push --version "${VERSION}"
+  export IMAGE_REF="garm:${IMAGE_TAG}"
 else
-  if (( skip_image )); then
-    docker manifest inspect "${image}" >/dev/null \
-      || die "image not found: ${image}"
-  else
-    "${script_dir}/build_image.sh" --version "${VERSION}"
-  fi
+  "${script_dir}/build_image.sh" --version "${VERSION}"
 fi
 
 "${script_dir}/package.sh" --version "${VERSION}"
+package="${script_dir}/../dist/garm_${VERSION}_pull.tar"
+image="${IMAGE_REF:-${image_repo}:${IMAGE_TAG}}"
 
 if (( dry_run )); then
   echo "release.sh: version ${VERSION} (dry run, no tag created)"
@@ -60,6 +65,28 @@ if (( dry_run )); then
 fi
 
 git tag -a "${tag}" -m "VOS garm ${VERSION}"
+
+send_feishu() {
+  local webhook="${FEISHU_WEBHOOK:-}"
+  if [[ -z "${webhook}" ]]; then
+    echo "release.sh: FEISHU_WEBHOOK not set, skipping notification"
+    return 0
+  fi
+  local text payload
+  text="$(printf 'GARM VOS 发布\n版本: %s\n镜像: %s\n包: %s\n分支: %s\n提交: %s' \
+    "${VERSION}" "${image}" "${package}" "${branch}" "$(git rev-parse --short HEAD)")"
+  payload="$(printf '{"msg_type":"text","content":{"text":"%s"}}' "${text//$'\n'/\\n}")"
+  if ! curl --fail -sS -X POST "${webhook}" -H "Content-Type: application/json" \
+    --data "${payload}" >/dev/null; then
+    echo "release.sh: Feishu notification failed" >&2
+  fi
+}
+
+if (( no_feishu )); then
+  echo "release.sh: Feishu notification skipped (--no-feishu)"
+else
+  send_feishu
+fi
 
 echo
 echo "release.sh: version ${VERSION}"

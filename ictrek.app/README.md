@@ -38,7 +38,9 @@ GARM 的 VOS 交付定义。
 git push origin main vos-garm-v<版本>         # 公开，触发 CI
 ```
 
-`--skip-image` 复用已推送镜像。`--dry-run` 只出包，不建 tag。
+`--no-push` 只构建本地镜像，不推送仓库。`--no-feishu` 不发飞书通知。`--dry-run` 只出包，不建 tag。
+
+飞书通知读环境变量 `FEISHU_WEBHOOK`，即机器人 webhook 地址。变量为空时跳过通知。
 
 CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校验镜像与 SHA、生成包、建公开 tag `v<版本>` 并发布 Release、推送 VOS App Store。
 

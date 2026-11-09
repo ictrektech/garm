@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 构建并推送 garm 镜像。镜像 tag 取版本号的 <DATE>.<GITSHA> 两段。
 #
-# 用法：build_image.sh [--version <version>]
+# 用法：build_image.sh [--version <version>] [--no-push]
+#   --no-push  只在本机构建并加载镜像，不推送仓库
 # 环境：
 #   PACKAGE_VERSION  版本覆盖，未指定时由 version.sh 生成
 #   IMAGE_REPO       镜像仓库前缀，默认 swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm
-#   PLATFORMS        构建平台，默认 linux/amd64,linux/arm64
+#   PLATFORMS        推送时的构建平台，默认 linux/amd64,linux/arm64
 #   BUILDER          buildx builder 名称，默认用当前默认 builder
 set -euo pipefail
 
@@ -18,13 +19,15 @@ PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDER="${BUILDER:-}"
 PACKAGE_VERSION="${PACKAGE_VERSION:-}"
 BASE_PATH="$(cat "${app_dir}/src/garm/base-path")"
+no_push=0
 
 die() { echo "build_image.sh: $*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) PACKAGE_VERSION="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --no-push) no_push=1; shift ;;
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -46,19 +49,33 @@ else
 fi
 
 ref="$(git rev-parse HEAD)"
-image="${IMAGE_REPO}:${image_tag}"
-echo "build_image.sh: building ${image} for ${PLATFORMS} as ${version}"
-
 builder_arg=()
-[[ -z "${BUILDER}" ]] || builder_arg=(--builder "${BUILDER}")
+
+if (( no_push )); then
+  # 单平台才能 --load，本地 tag 不带仓库前缀，避免误以为镜像已推送。
+  image="garm:${image_tag}"
+  platform_args=()
+  output_args=(--load)
+  echo "build_image.sh: building ${image} for the local platform as ${version}"
+else
+  image="${IMAGE_REPO}:${image_tag}"
+  platform_args=(--platform "${PLATFORMS}")
+  output_args=(--push)
+  [[ -z "${BUILDER}" ]] || builder_arg=(--builder "${BUILDER}")
+  echo "build_image.sh: building ${image} for ${PLATFORMS} as ${version}"
+fi
 
 docker buildx build "${builder_arg[@]}" \
-  --platform "${PLATFORMS}" \
+  "${platform_args[@]}" \
   --build-arg "GARM_REF=${ref}" \
   --build-arg "GARM_BASE_PATH=${BASE_PATH}" \
   --tag "${image}" \
-  --push \
+  "${output_args[@]}" \
   .
 
-docker manifest inspect "${image}" >/dev/null
-echo "build_image.sh: pushed ${image}"
+if (( no_push )); then
+  echo "build_image.sh: built ${image} (not pushed)"
+else
+  docker manifest inspect "${image}" >/dev/null
+  echo "build_image.sh: pushed ${image}"
+fi
