@@ -1,0 +1,158 @@
+name: VOS App Release
+
+on:
+  push:
+    tags: ["vos-garm-v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#vos-garm-v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8})\.([0-9]+)\.([0-9a-zA-Z]+)$ ]] \
+            || { echo "invalid version: $VERSION"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${BASH_REMATCH[1]}.${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+          echo "sha=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify commit matches version
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          [[ "$head_sha" == "${{ steps.version.outputs.sha }}"* ]] \
+            || { echo "HEAD $head_sha does not match version sha"; exit 1; }
+
+      - name: Login to registry
+        env:
+          REGISTRY: swr.cn-southwest-2.myhuaweicloud.com
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        if: env.REGISTRY_USERNAME != ''
+        run: |
+          set -euo pipefail
+          echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+
+      - name: Verify image exists
+        env:
+          IMAGE_REPO: swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm
+        run: |
+          set -euo pipefail
+          image="${IMAGE_REPO}:${{ steps.version.outputs.image_tag }}"
+          docker manifest inspect "$image" > /dev/null || { echo "missing image: $image"; exit 1; }
+          echo "verified $image"
+
+      - name: Build pull package
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ./ictrek.app/scripts/package.sh --version "$PACKAGE_VERSION"
+          test -f "ictrek.app/dist/garm_${PACKAGE_VERSION}_pull.tar"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PUBLIC_TAG="v${VERSION}"
+          PACKAGE="ictrek.app/dist/garm_${VERSION}_pull.tar"
+
+          gh release list --limit 100 --json tagName,publishedAt > releases.json
+          previous="$(python3 - releases.json "$PUBLIC_TAG" <<'PY'
+          import json, sys
+
+          releases = json.load(open(sys.argv[1]))
+          current = sys.argv[2]
+          items = [r for r in releases if r["tagName"].startswith("v") and r["tagName"] != current]
+          items.sort(key=lambda r: r["publishedAt"], reverse=True)
+          print(items[0]["tagName"] if items else "")
+          PY
+          )"
+
+          {
+            echo "VOS app package for com.ictrek.garm."
+            echo
+            echo "Upstream base: ${VERSION%%-*}"
+            if [[ -n "$previous" ]]; then
+              echo
+              echo "Changes since ${previous}:"
+              git log --no-merges --pretty='- %s (%h)' "${previous}..${GITHUB_SHA}"
+            fi
+          } > release-notes.md
+
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${PUBLIC_TAG}" > /dev/null 2>&1; then
+            git tag "$PUBLIC_TAG" "$GITHUB_SHA"
+            git push origin "$PUBLIC_TAG"
+          fi
+          gh release create "$PUBLIC_TAG" "$PACKAGE" \
+            --verify-tag --latest --title "$PUBLIC_TAG" --notes-file release-notes.md
+
+      - name: Publish to VOS App Store
+        env:
+          APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -n "${APPSTORE_IP:-}" || { echo "APPSTORE_IP is not configured" >&2; exit 1; }
+          test -n "${APPSTORE_TOKEN:-}" || { echo "APPSTORE_TOKEN is not configured" >&2; exit 1; }
+
+          PACKAGE="ictrek.app/dist/garm_${VERSION}_pull.tar"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keyscan -H -p 32222 "$APPSTORE_IP" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+
+          askpass="$RUNNER_TEMP/appstore-askpass.sh"
+          printf '#!/bin/sh\nprintf "%%s\\n" "$APPSTORE_TOKEN"\n' > "$askpass"
+          chmod 700 "$askpass"
+          export SSH_ASKPASS="$askpass"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY=:0
+
+          socket="$RUNNER_TEMP/appstore-ssh.sock"
+          trap 'ssh -S "$socket" -O exit -p 32222 tunneluser@"$APPSTORE_IP" >/dev/null 2>&1 || true' EXIT
+
+          ssh -M -S "$socket" -f -N -L 18899:127.0.0.1:18090 -p 32222 \
+            -o BatchMode=no -o ExitOnForwardFailure=yes \
+            -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            tunneluser@"$APPSTORE_IP" </dev/null
+
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:18899/api/health" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          [[ "$ready" == true ]] || { echo "app store tunnel not ready" >&2; exit 1; }
+
+          response="$(curl -kfsS -F "package=@${PACKAGE}" -F "force=true" -F "channel=stable" \
+            "http://127.0.0.1:18899/api/appstore/apps")"
+          RESPONSE="$response" python3 - <<'PY'
+          import json, os, sys
+
+          payload = json.loads(os.environ["RESPONSE"])
+          if payload.get("code") != 0:
+              print(payload, file=sys.stderr)
+              raise SystemExit("app store publish failed")
+          data = payload.get("data") or {}
+          print(f"published {data.get('app_id')}@{data.get('version')}")
+          PY
