@@ -24,4 +24,4 @@ time_to_live = "8760h"
   backend = "sqlite3"
   passphrase = "__DB_PASSPHRASE__"
   [database.sqlite3]
-    db_file = "/data/garm/garm.db"
+    db_file = "/data/garm.db"

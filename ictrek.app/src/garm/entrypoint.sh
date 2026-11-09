@@ -3,7 +3,7 @@
 # Secrets are generated once and kept in the app storage.
 set -eu
 
-DATA_DIR="${VOS_APP_STORAGE_PATH:-/data}/garm"
+DATA_DIR="/data"
 CONF_DIR="${DATA_DIR}"
 SECRETS="${CONF_DIR}/secrets.env"
 
