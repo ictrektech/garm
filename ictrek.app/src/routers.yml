@@ -1,0 +1,12 @@
+routers:
+  - id: runners
+    kind: page
+    title:
+      zh-CN: 运行器管理
+      en: Runner Manager
+    icon: lucide:server-cog
+    order: 200
+    iframe-src: /app/com.ictrek.garm/ui/
+    keep-alive: true
+    entry-point: true
+    embed: true

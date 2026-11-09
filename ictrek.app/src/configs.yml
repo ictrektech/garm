@@ -1,0 +1,11 @@
+configs:
+  - name: GARM_LOG_LEVEL
+    type: string
+    title:
+      zh-CN: 日志级别
+      en: Log level
+    description:
+      zh-CN: 取值范围 debug、info、warn、error。
+      en: One of debug, info, warn, error.
+    default: info
+    enum: [debug, info, warn, error]

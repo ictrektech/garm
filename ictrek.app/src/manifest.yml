@@ -1,0 +1,22 @@
+id: com.ictrek.garm
+name:
+  zh-CN: GARM
+  en: GARM
+description:
+  zh-CN: 自托管 GitHub Actions 与 Gitea Actions 运行器管理器。
+  en: Self-hosted runner manager for GitHub Actions and Gitea Actions.
+version: __APP_VERSION__
+author: ictrek
+category: [developer]
+arch: [amd64, arm64]
+icon: icon.png
+
+platform:
+  version: ">=3.0.0"
+
+storage:
+  directories:
+    - path: garm
+      uid: 0
+      gid: 0
+      mode: "0700"

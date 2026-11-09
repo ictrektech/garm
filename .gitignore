@@ -32,3 +32,9 @@ webapp/assets/assets/
 webapp/assets/index.html
 webapp/assets/*.png
 webapp/build/
+
+# VOS app build output
+ictrek.app/dist/
+
+# Local task notes
+tasks/
