@@ -33,11 +33,12 @@ cd "${repo_root}"
 
 git diff --quiet && git diff --cached --quiet || die "worktree is not clean"
 
-# 序号从远端 tag 反推，必须先取回。
-git fetch --no-tags --force origin 'refs/tags/*:refs/tags/*' >/dev/null 2>&1 \
-  || die "cannot fetch tags from origin"
+# 让本地看到远端 tag，便于同名检查。不得用带 --force 的通配 refspec，
+# 远端无匹配 tag 时 git 会删除本地同名 tag。
+git fetch --tags origin >/dev/null 2>&1 || die "cannot fetch tags from origin"
 
-eval "$("${script_dir}/version.sh")"
+version_out="$("${script_dir}/version.sh")" || die "cannot compute version, see the error above"
+eval "${version_out}"
 tag="vos-garm-v${VERSION}"
 image_repo="${IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm}"
 branch="$(git branch --show-current)"

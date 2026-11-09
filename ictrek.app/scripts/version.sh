@@ -23,8 +23,12 @@ done
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "${script_dir}" rev-parse --show-toplevel)"
 
-core="$(git -C "${repo_root}" describe --tags --abbrev=0 \
-  --match 'v[0-9]*' --exclude '*-*' HEAD | sed 's/^v//')"
+if ! core="$(git -C "${repo_root}" describe --tags --abbrev=0 \
+  --match 'v[0-9]*' --exclude '*-*' HEAD 2>/dev/null | sed 's/^v//')"; then
+  echo "version.sh: no stable upstream tag reachable from HEAD" >&2
+  echo "version.sh: run 'git fetch upstream --tags' first" >&2
+  exit 1
+fi
 if ! [[ "${core}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "version.sh: bad core version from git describe: ${core}" >&2
   exit 1
