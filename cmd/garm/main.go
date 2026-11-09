@@ -364,10 +364,16 @@ func main() {
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
 	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
 
+	// Serve the whole API (including /ui) under the configured prefix.
+	var handler http.Handler = router
+	if basePath := cfg.APIServer.WebUI.GetBasePath(); basePath != "" {
+		handler = http.StripPrefix(basePath, router)
+	}
+
 	srv := &http.Server{
 		Addr: cfg.APIServer.BindAddress(),
 		// Pass our instance of gorilla/mux in.
-		Handler:           handlers.CORS(methodsOk, headersOk, allowedOrigins)(router),
+		Handler:           handlers.CORS(methodsOk, headersOk, allowedOrigins)(handler),
 		ReadHeaderTimeout: 5 * time.Second,
 		MaxHeaderBytes:    1 << 20, // 1 MB
 		// Increased timeouts to support large file uploads/downloads

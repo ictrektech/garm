@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -702,16 +703,32 @@ func (m *Metrics) Duration() time.Duration {
 // WebUI holds configuration for the web UI
 type WebUI struct {
 	EnableWebUI bool `toml:"enable" json:"enable"`
+	// BasePath is the public URL prefix the app is served under, for example
+	// "/app/com.ictrek.garm". Empty means the app is served from the root.
+	BasePath string `toml:"base_path" json:"base-path"`
 }
 
 // Validate validates the WebUI config
 func (w *WebUI) Validate() error {
+	if w.BasePath != "" && !strings.HasPrefix(w.BasePath, "/") {
+		return fmt.Errorf("webui base_path must start with /: %q", w.BasePath)
+	}
 	return nil
+}
+
+// GetBasePath returns the configured prefix without a trailing slash.
+func (w *WebUI) GetBasePath() string {
+	return strings.TrimSuffix(w.BasePath, "/")
 }
 
 // GetWebappPath returns the webapp path with proper formatting
 func (w *WebUI) GetWebappPath() string {
 	return "/ui/"
+}
+
+// GetPublicWebappPath returns the webapp path as seen by the browser.
+func (w *WebUI) GetPublicWebappPath() string {
+	return w.GetBasePath() + w.GetWebappPath()
 }
 
 // APIServer holds configuration for the API server

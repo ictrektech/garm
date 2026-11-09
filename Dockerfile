@@ -1,6 +1,10 @@
 # Stage 1: Build webapp
 FROM docker.io/node:lts-alpine AS webapp
 
+# Public URL prefix the app is served under. Must match apiserver.webui.base_path.
+ARG GARM_BASE_PATH=
+ENV VITE_GARM_BASE_PATH=${GARM_BASE_PATH}
+
 WORKDIR /build/webapp
 COPY webapp/package.json webapp/package-lock.json ./
 RUN npm ci

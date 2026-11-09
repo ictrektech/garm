@@ -104,10 +104,11 @@ func WithWebUI(parentRouter *mux.Router, apiConfig config.APIServer) *mux.Router
 	if apiConfig.WebUI.EnableWebUI {
 		slog.Info("WebUI is enabled, adding webapp routes")
 		webappPath := apiConfig.WebUI.GetWebappPath()
-		slog.Info("Using webapp path", "path", webappPath)
+		publicPath := apiConfig.WebUI.GetPublicWebappPath()
+		slog.Info("Using webapp path", "path", webappPath, "public_path", publicPath)
 		// Accessing / should redirect to the UI
 		parentRouter.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, webappPath, http.StatusMovedPermanently) // 301
+			http.Redirect(w, r, publicPath, http.StatusMovedPermanently) // 301
 		})
 		// Serve the SPA with dynamic path
 		parentRouter.PathPrefix(webappPath).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

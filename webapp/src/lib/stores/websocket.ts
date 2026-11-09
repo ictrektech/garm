@@ -1,4 +1,5 @@
 import { writable, get } from 'svelte/store';
+import { APP_BASE_PATH } from '../base-path';
 
 // Event types that match the websocket API
 export type EntityType =
@@ -67,7 +68,7 @@ function createWebSocketStore() {
 	function getWebSocketUrl(): string {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const host = window.location.host;
-		return `${protocol}//${host}/api/v1/ws/events`;
+		return `${protocol}//${host}${APP_BASE_PATH}/api/v1/ws/events`;
 	}
 
 	function connect() {

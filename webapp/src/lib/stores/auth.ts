@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { garmApi } from '../api/client.js';
+import { APP_BASE_PATH } from '../base-path';
 
 // Check if we're in development mode (cross-origin setup)
 const isDevelopmentMode = () => {
@@ -162,7 +163,7 @@ export const auth = {
 				headers['Authorization'] = `Bearer ${token}`;
 			}
 			
-			const response = await fetch('/api/v1/login', {
+			const response = await fetch(`${APP_BASE_PATH}/api/v1/login`, {
 				method: 'GET',
 				headers,
 				// Only include credentials in production (same-origin)
@@ -259,7 +260,7 @@ export const auth = {
 			await auth.login(username, password);
 			
 			// Step 3: Set controller URLs (similar to garm-cli init)
-			const currentUrl = window.location.origin;
+			const currentUrl = window.location.origin + APP_BASE_PATH;
 			const finalMetadataUrl = urls?.metadataUrl || `${currentUrl}/api/v1/metadata`;
 			const finalCallbackUrl = urls?.callbackUrl || `${currentUrl}/api/v1/callbacks`;
 			const finalWebhookUrl = urls?.webhookUrl || `${currentUrl}/webhooks`;

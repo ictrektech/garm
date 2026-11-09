@@ -1,4 +1,5 @@
 import { writable, readonly } from 'svelte/store';
+import { APP_BASE_PATH } from '../base-path';
 
 export type MetricsConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -61,7 +62,7 @@ function createMetricsStore() {
 	function getWebSocketUrl(): string {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const host = window.location.host;
-		return `${protocol}//${host}/api/v1/ws/metrics`;
+		return `${protocol}//${host}${APP_BASE_PATH}/api/v1/ws/metrics`;
 	}
 
 	function connect() {

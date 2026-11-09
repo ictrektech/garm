@@ -5,6 +5,7 @@
 	import { auth, authStore } from '$lib/stores/auth.js';
 	import { toastStore } from '$lib/stores/toast.js';
 	import { extractAPIError } from '$lib/utils/apiError';
+	import { APP_BASE_PATH } from '$lib/base-path';
 	import Button from '$lib/components/Button.svelte';
 
 	let username = 'admin';
@@ -24,7 +25,7 @@
 	
 	// Auto-populate URLs with current origin
 	$: if (typeof window !== 'undefined') {
-		const currentUrl = window.location.origin;
+		const currentUrl = window.location.origin + APP_BASE_PATH;
 		if (!callbackUrl) callbackUrl = `${currentUrl}/api/v1/callbacks`;
 		if (!metadataUrl) metadataUrl = `${currentUrl}/api/v1/metadata`;
 		if (!webhookUrl) webhookUrl = `${currentUrl}/webhooks`;

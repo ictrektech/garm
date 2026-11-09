@@ -58,6 +58,7 @@ import {
   type RestoreTemplateRequest,
   Configuration
 } from './generated/index';
+import { APP_BASE_PATH } from '../base-path';
 
 // Re-export types for compatibility
 export type {
@@ -137,7 +138,7 @@ export class GeneratedGarmApiClient {
   private objectsApi: ObjectsApi;
 
   constructor(baseUrl: string = '') {
-    this.baseUrl = baseUrl || window.location.origin;
+    this.baseUrl = baseUrl || window.location.origin + APP_BASE_PATH;
     
     // Create configuration for the generated client
     const isDevMode = this.isDevelopmentMode();

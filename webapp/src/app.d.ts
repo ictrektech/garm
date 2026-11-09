@@ -5,6 +5,10 @@ declare global {
 		interface PageData {}
 		interface Platform {}
 	}
+
+	interface ImportMetaEnv {
+		readonly VITE_GARM_BASE_PATH?: string;
+	}
 }
 
 export {};

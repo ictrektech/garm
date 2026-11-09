@@ -1,4 +1,5 @@
 import { garmApi } from '$lib/api/client';
+import { APP_BASE_PATH } from '$lib/base-path';
 
 export interface ShellMessage {
   type: 'createShell' | 'shellReady' | 'shellData' | 'shellResize' | 'shellExit' | 'clientShellClosed';
@@ -108,7 +109,7 @@ export function createShellConnection(
   return new Promise((resolve, reject) => {
     try {
       // Create WebSocket URL - convert HTTP(S) to WS(S) and rely on cookie authentication
-      const baseUrl = window.location.origin.replace(/^http/, 'ws');
+      const baseUrl = (window.location.origin + APP_BASE_PATH).replace(/^http/, 'ws');
       const wsUrl = `${baseUrl}/api/v1/ws/agent/${encodeURIComponent(runnerName)}/shell`;
       
       const ws = new WebSocket(wsUrl);
