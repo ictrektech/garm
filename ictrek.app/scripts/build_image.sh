@@ -22,6 +22,7 @@ BASE_PATH="$(cat "${app_dir}/src/garm/base-path")"
 # 可选：构建期源加速，留空时用官方源。
 APK_MIRROR="${APK_MIRROR:-}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
+GITHUB_PROXY="${GITHUB_PROXY:-}"
 no_push=0
 
 die() { echo "build_image.sh: $*" >&2; exit 1; }
@@ -56,6 +57,7 @@ builder_arg=()
 mirror_args=()
 [[ -z "${APK_MIRROR}" ]] || mirror_args+=(--build-arg "APK_MIRROR=${APK_MIRROR}")
 [[ -z "${NPM_REGISTRY}" ]] || mirror_args+=(--build-arg "NPM_REGISTRY=${NPM_REGISTRY}")
+[[ -z "${GITHUB_PROXY}" ]] || mirror_args+=(--build-arg "GITHUB_PROXY=${GITHUB_PROXY}")
 
 if (( no_push )); then
   # 单平台才能 --load，本地 tag 不带仓库前缀，避免误以为镜像已推送。

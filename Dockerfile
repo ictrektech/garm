@@ -19,6 +19,8 @@ FROM docker.io/golang:alpine AS builder
 ARG GARM_REF
 # Optional Alpine mirror, for example https://mirrors.aliyun.com/alpine.
 ARG APK_MIRROR=
+# Optional GitHub proxy prefix, for example https://gh-proxy.example.com.
+ARG GITHUB_PROXY=
 
 LABEL stage=builder
 
@@ -48,6 +50,12 @@ RUN cd /build/garm/cmd/garm-cli \
       . && upx /bin/garm-cli
 RUN set -ex; \
     mkdir -p /opt/garm/providers.d; \
+    GITHUB_URL="https://github.com"; \
+    API_URL="https://api.github.com"; \
+    if [ -n "${GITHUB_PROXY}" ]; then \
+      GITHUB_URL="${GITHUB_PROXY%/}/https://github.com"; \
+      API_URL="${GITHUB_PROXY%/}/https://api.github.com"; \
+    fi; \
     for repo in \
       cloudbase/garm-provider-azure \
       cloudbase/garm-provider-openstack \
@@ -61,12 +69,18 @@ RUN set -ex; \
     do \
         export PROVIDER_NAME="$(basename $repo)"; \
         export PROVIDER_SUBDIR=""; \
-        if [ "$GARM_REF" == "main" ]; then \
+        if [ "$GARM_REF" = "main" ]; then \
           export PROVIDER_REF="main"; \
         else \
-          export PROVIDER_REF="$(curl -s -L https://api.github.com/repos/$repo/releases/latest | jq -r '.tag_name')"; \
+          export PROVIDER_REF="$(curl -sS --retry 3 -L "$API_URL/repos/$repo/releases/latest" | jq -r '.tag_name')"; \
         fi; \
-        git clone --branch "$PROVIDER_REF" "https://github.com/$repo" "/build/$PROVIDER_NAME"; \
+        for attempt in 1 2 3; do \
+          rm -rf "/build/$PROVIDER_NAME"; \
+          if git clone --depth 1 --branch "$PROVIDER_REF" "$GITHUB_URL/$repo" "/build/$PROVIDER_NAME"; then break; fi; \
+          echo "clone failed for $repo, attempt $attempt"; \
+          sleep 10; \
+        done; \
+        test -d "/build/$PROVIDER_NAME/.git"; \
         case $PROVIDER_NAME in \
         "garm-provider-k8s") \
             export PROVIDER_SUBDIR="cmd/garm-provider-k8s"; \
