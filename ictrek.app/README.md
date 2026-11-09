@@ -42,6 +42,16 @@ git push origin main vos-garm-v<版本>         # 公开，触发 CI
 
 飞书通知读环境变量 `FEISHU_WEBHOOK`，即机器人 webhook 地址。变量为空时跳过通知。
 
+构建慢时可以换源：
+
+```bash
+APK_MIRROR=https://mirrors.aliyun.com/alpine \
+NPM_REGISTRY=https://registry.npmmirror.com \
+./ictrek.app/scripts/release.sh --no-push --no-feishu
+```
+
+Docker Hub 由宿主机 `registry-mirrors` 加速，脚本不处理。
+
 CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校验镜像与 SHA、生成包、建公开 tag `v<版本>` 并发布 Release、推送 VOS App Store。
 
 ## 约束

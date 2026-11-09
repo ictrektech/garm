@@ -5,19 +5,27 @@ FROM docker.io/node:lts-alpine AS webapp
 ARG GARM_BASE_PATH=
 ENV VITE_GARM_BASE_PATH=${GARM_BASE_PATH}
 
+# Optional npm registry, for example https://registry.npmmirror.com.
+ARG NPM_REGISTRY=
+
 WORKDIR /build/webapp
 COPY webapp/package.json webapp/package-lock.json ./
-RUN npm ci
+RUN if [ -n "${NPM_REGISTRY}" ]; then npm config set registry "${NPM_REGISTRY}"; fi && npm ci
 COPY webapp/ ./
 RUN npm run build
 
 # Stage 2: Build Go binaries
 FROM docker.io/golang:alpine AS builder
 ARG GARM_REF
+# Optional Alpine mirror, for example https://mirrors.aliyun.com/alpine.
+ARG APK_MIRROR=
 
 LABEL stage=builder
 
-RUN apk add --no-cache musl-dev gcc libtool m4 autoconf g++ make libblkid util-linux-dev git linux-headers upx curl jq
+RUN if [ -n "${APK_MIRROR}" ]; then \
+      sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${APK_MIRROR}|g" /etc/apk/repositories; \
+    fi && \
+    apk add --no-cache musl-dev gcc libtool m4 autoconf g++ make libblkid util-linux-dev git linux-headers upx curl jq
 RUN git config --global --add safe.directory /build && git config --global --add advice.detachedHead false
 RUN echo ${GARM_REF}
 
