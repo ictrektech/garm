@@ -31,7 +31,11 @@ done
 
 cd "${repo_root}"
 
-git diff --quiet && git diff --cached --quiet || die "worktree is not clean"
+# vendor/ 与 webapp/node_modules 不参与检查：前者由 go mod vendor 生成，
+# 后者被 .gitignore 忽略，二者在 NFS 上会显著拖慢工作区扫描。
+git diff --cached --quiet || die "worktree has staged changes"
+git diff --quiet -- . ':(exclude)vendor' ':(exclude)webapp/node_modules' \
+  || die "worktree has unstaged changes (vendor and node_modules excluded)"
 
 # 让本地看到远端 tag，便于同名检查。不得用带 --force 的通配 refspec，
 # 远端无匹配 tag 时 git 会删除本地同名 tag。

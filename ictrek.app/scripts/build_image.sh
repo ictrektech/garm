@@ -40,7 +40,11 @@ done
 cd "${repo_root}"
 
 # 镜像内容来自工作区，有未提交改动时镜像与 <GITSHA> 不符。
-git diff --quiet && git diff --cached --quiet || die "worktree is not clean"
+# vendor/ 与 webapp/node_modules 不参与检查：前者由 go mod vendor 生成，
+# 后者被 .gitignore 忽略，二者在 NFS 上会显著拖慢工作区扫描。
+git diff --cached --quiet || die "worktree has staged changes"
+git diff --quiet -- . ':(exclude)vendor' ':(exclude)webapp/node_modules' \
+  || die "worktree has unstaged changes (vendor and node_modules excluded)"
 
 if [[ -n "${PACKAGE_VERSION}" ]]; then
   [[ "${PACKAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8})\.([0-9]+)\.([0-9A-Za-z]+)$ ]] \
