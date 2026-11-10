@@ -14,6 +14,7 @@ GARM 的 VOS 交付定义。
 | `scripts/image-ref.sh` | 生成本地镜像引用，带架构前缀 |
 | `scripts/build_image.sh` | 多架构构建并推送镜像 |
 | `scripts/package.sh` | 生成 pull 安装包 |
+| `scripts/feishu_sheet.py` | 把镜像 tag 写入 VOS 发布表 |
 | `scripts/release.sh` | 本地发布入口 |
 | `dist/` | 构建产物，不提交 |
 
@@ -46,9 +47,15 @@ garm:arm_v0.2.1_20261110.1.e8478193
 git push origin main vos-garm-v<版本>         # 公开，触发 CI
 ```
 
-`--no-push` 只构建本地镜像，不推送仓库。`--no-feishu` 不发飞书通知。`--dry-run` 只出包，不建 tag。
+`--no-push` 只构建本地镜像，不推送仓库。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 只出包，不建 tag。
 
-飞书通知读环境变量 `FEISHU_WEBHOOK`，即机器人 webhook 地址。变量为空时跳过通知。
+推送成功后把镜像 tag 写入 VOS 发布表。凭据来自 `~/.feishu.json`，或用 `FEISHU_CONFIG_FILE` 指定文件。字段为 `feishu_app_id`、`feishu_app_secret`、`feishu_spreadsheet_token`。
+
+- amd 镜像写入 `AMD_with_cuda`。
+- arm 镜像写入 `ARM_without_cuda`。
+- 列名为 `garm`，列不存在时自动创建并补写第 1、2 行。
+- 单元格内容形如 `amd_v0.2.1_20261110.1.e8478193`。
+- 写表失败时命令直接退出，不继续。
 
 构建慢时可以换源：
 
@@ -59,7 +66,7 @@ GITHUB_PROXY=https://gh-proxy.example.com \
 ./ictrek.app/scripts/release.sh --no-push --no-feishu
 ```
 
-`GITHUB_PROXY` 只影响构建期克隆 9 个 provider 仓库。provider 克隆用 `--depth 1`，失败自动重试 3 次。
+`GITHUB_PROXY` 只影响构建期克隆 provider 仓库。provider 克隆用 `--depth 1`，失败自动重试 3 次。
 
 Docker Hub 由宿主机 `registry-mirrors` 加速，脚本不处理。
 

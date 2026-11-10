@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 本地发布：算版本、出镜像、出包、建 tag、发飞书，然后打印推送命令。
+# 本地发布：算版本、出镜像、出包、建 tag、写飞书发布表，然后打印推送命令。
 # 不推送 git，推送由人执行。推 tag 会触发 .github/workflows/vos-release.yml。
 #
 # 用法：release.sh [--no-push] [--no-feishu] [--dry-run]
 #   --no-push    只构建本地镜像，不推送仓库；打出的包引用本地 tag
-#   --no-feishu  不发飞书通知
+#   --no-feishu  跳过写入飞书发布表
 #   --dry-run    只出包，跳过镜像与 tag，用于预览
 # 环境：
-#   FEISHU_WEBHOOK  飞书机器人 webhook 地址，未设置时跳过通知
+#   FEISHU_CONFIG_FILE  飞书凭据文件，默认 ~/.feishu.json
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -60,17 +60,21 @@ if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   echo "release.sh: tag ${tag} already exists for this commit, reusing it"
 fi
 
+build_args=(--version "${VERSION}")
+if (( no_feishu )); then
+  build_args+=(--no-feishu)
+fi
+
 if (( dry_run )); then
   echo "release.sh: dry run, skipping image build and tag"
 elif (( no_push )); then
-  "${script_dir}/build_image.sh" --no-push --version "${VERSION}"
+  "${script_dir}/build_image.sh" --no-push "${build_args[@]}"
   export IMAGE_REF="$("${script_dir}/image-ref.sh" --version "${VERSION}")"
 else
-  "${script_dir}/build_image.sh" --version "${VERSION}"
+  "${script_dir}/build_image.sh" "${build_args[@]}"
 fi
 
 "${script_dir}/package.sh" --version "${VERSION}"
-package="${script_dir}/../dist/garm_${VERSION}_pull.tar"
 image="${IMAGE_REF:-${image_repo}:${IMAGE_TAG}}"
 
 if (( dry_run )); then
@@ -82,28 +86,6 @@ if (( tag_exists )); then
   echo "release.sh: tag ${tag} already created, skipping"
 else
   git tag -a "${tag}" -m "VOS garm ${VERSION}"
-fi
-
-send_feishu() {
-  local webhook="${FEISHU_WEBHOOK:-}"
-  if [[ -z "${webhook}" ]]; then
-    echo "release.sh: FEISHU_WEBHOOK not set, skipping notification"
-    return 0
-  fi
-  local text payload
-  text="$(printf 'GARM VOS 发布\n版本: %s\n镜像: %s\n包: %s\n分支: %s\n提交: %s' \
-    "${VERSION}" "${image}" "${package}" "${branch}" "$(git rev-parse --short HEAD)")"
-  payload="$(printf '{"msg_type":"text","content":{"text":"%s"}}' "${text//$'\n'/\\n}")"
-  if ! curl --fail -sS -X POST "${webhook}" -H "Content-Type: application/json" \
-    --data "${payload}" >/dev/null; then
-    echo "release.sh: Feishu notification failed" >&2
-  fi
-}
-
-if (( no_feishu )); then
-  echo "release.sh: Feishu notification skipped (--no-feishu)"
-else
-  send_feishu
 fi
 
 echo

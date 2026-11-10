@@ -2,13 +2,15 @@
 # 构建并推送 garm 镜像。推送用 manifest list，tag 取版本号的 <DATE>.<GITSHA> 两段。
 # 本地构建（--no-push）的 tag 带架构前缀，由 image-ref.sh 生成。
 #
-# 用法：build_image.sh [--version <version>] [--no-push]
-#   --no-push  只在本机构建并加载镜像，不推送仓库
+# 用法：build_image.sh [--version <version>] [--no-push] [--no-feishu]
+#   --no-push    只在本机构建并加载镜像，不推送仓库
+#   --no-feishu  推送成功后跳过写入飞书发布表
 # 环境：
 #   PACKAGE_VERSION  版本覆盖，未指定时由 version.sh 生成
 #   IMAGE_REPO       镜像仓库前缀，默认 swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm
 #   PLATFORMS        推送时的构建平台，默认 linux/amd64,linux/arm64
 #   BUILDER          buildx builder 名称，默认用当前默认 builder
+#   FEISHU_CONFIG_FILE  飞书凭据文件，默认 ~/.feishu.json
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,6 +27,7 @@ APK_MIRROR="${APK_MIRROR:-}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
 GITHUB_PROXY="${GITHUB_PROXY:-}"
 no_push=0
+no_feishu=0
 
 die() { echo "build_image.sh: $*" >&2; exit 1; }
 
@@ -32,7 +35,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) PACKAGE_VERSION="${2:-}"; shift 2 ;;
     --no-push) no_push=1; shift ;;
-    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    --no-feishu) no_feishu=1; shift ;;
+    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -50,11 +54,13 @@ if [[ -n "${PACKAGE_VERSION}" ]]; then
   [[ "${PACKAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8})\.([0-9]+)\.([0-9A-Za-z]+)$ ]] \
     || die "invalid version: ${PACKAGE_VERSION}"
   version="${PACKAGE_VERSION}"
+  date_part="${BASH_REMATCH[1]}"
   image_tag="${BASH_REMATCH[1]}.${BASH_REMATCH[3]}"
 else
   eval "$("${script_dir}/version.sh")"
   version="${VERSION}"
   image_tag="${IMAGE_TAG}"
+  date_part="${image_tag%%.*}"
 fi
 
 ref="$(git rev-parse HEAD)"
@@ -88,9 +94,33 @@ docker buildx build "${builder_arg[@]}" \
   "${output_args[@]}" \
   .
 
+# 把镜像 tag 写进 VOS 发布表。amd 与 arm 分别落在固定的工作表里，
+# 写入失败直接退出，避免发布记录与实际镜像不一致。
+record_sheet() {
+  local sheet="$1" value="$2"
+  python3 "${script_dir}/feishu_sheet.py" \
+    --sheet "${sheet}" \
+    --component "garm" \
+    --image "${IMAGE_REPO}" \
+    --value "${value}" \
+    --date "${date_part}" \
+    || die "cannot record ${value} in sheet ${sheet}"
+}
+
 if (( no_push )); then
   echo "build_image.sh: built ${image} (not pushed)"
 else
   docker manifest inspect "${image}" >/dev/null
   echo "build_image.sh: pushed ${image}"
+  if (( no_feishu )); then
+    echo "build_image.sh: Feishu sheet update skipped (--no-feishu)"
+  else
+    command -v python3 >/dev/null 2>&1 || die "python3 is required to update the Feishu sheet"
+    case "${PLATFORMS}" in
+      *amd64*) record_sheet "AMD_with_cuda" "amd_v${version//-/_}" ;;
+    esac
+    case "${PLATFORMS}" in
+      *arm64*) record_sheet "ARM_without_cuda" "arm_v${version//-/_}" ;;
+    esac
+  fi
 fi
