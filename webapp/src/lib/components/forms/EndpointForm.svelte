@@ -25,6 +25,7 @@
 
 	function handleForgeTypeSelect(event: CustomEvent<'github' | 'gitea'>) {
 		selectedForgeType = event.detail;
+		formData.endpoint_type = event.detail;
 		formData.name = '';
 		formData.description = '';
 		formData.base_url = '';
