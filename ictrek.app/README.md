@@ -11,6 +11,7 @@ GARM 的 VOS 交付定义。
 | `src/garm/config.toml.tpl` | 运行配置模板，由入口脚本渲染 |
 | `scripts/version.sh` | 生成版本串与镜像 tag |
 | `scripts/git-sha.sh` | 生成合法 SemVer 的短 SHA |
+| `scripts/image-ref.sh` | 生成本地镜像引用，带架构前缀 |
 | `scripts/build_image.sh` | 多架构构建并推送镜像 |
 | `scripts/package.sh` | 生成 pull 安装包 |
 | `scripts/release.sh` | 本地发布入口 |
@@ -29,7 +30,14 @@ GARM 的 VOS 交付定义。
 - `<N>`：远端同名日期 tag 的最大序号加一。
 - `<GITSHA>`：8 位起，遇前导零加长。
 
-镜像 tag 只取后两段，即 `20261109.158fe569`。
+推送的镜像 tag 只取后两段，即 `20261109.158fe569`，多架构共用这一个 manifest list。
+
+本地构建（`--no-push`）的 tag 带架构前缀，格式为 `<arch>_v<版本>`，由 `scripts/image-ref.sh` 生成：
+
+```text
+garm:amd_v0.2.1_20261110.1.e8478193
+garm:arm_v0.2.1_20261110.1.e8478193
+```
 
 ## 发布
 

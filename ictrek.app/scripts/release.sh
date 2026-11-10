@@ -43,15 +43,24 @@ tag="vos-garm-v${VERSION}"
 image_repo="${IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm}"
 branch="$(git branch --show-current)"
 
+# 同一提交可能被多个架构各构建一次。tag 与架构无关，已存在且指向 HEAD 时复用，
+# 指向其他提交时才视为冲突。
+tag_exists=0
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-  die "tag already exists: ${tag}; delete it or use a new build date"
+  tag_sha="$(git rev-list -n1 "refs/tags/${tag}")"
+  head_sha="$(git rev-parse HEAD)"
+  if [[ "${tag_sha}" != "${head_sha}" ]]; then
+    die "tag already exists: ${tag} (points to ${tag_sha:0:8}, HEAD is ${head_sha:0:8}); delete it or use a new build date"
+  fi
+  tag_exists=1
+  echo "release.sh: tag ${tag} already exists for this commit, reusing it"
 fi
 
 if (( dry_run )); then
   echo "release.sh: dry run, skipping image build and tag"
 elif (( no_push )); then
   "${script_dir}/build_image.sh" --no-push --version "${VERSION}"
-  export IMAGE_REF="garm:${IMAGE_TAG}"
+  export IMAGE_REF="$("${script_dir}/image-ref.sh" --version "${VERSION}")"
 else
   "${script_dir}/build_image.sh" --version "${VERSION}"
 fi
@@ -65,7 +74,11 @@ if (( dry_run )); then
   exit 0
 fi
 
-git tag -a "${tag}" -m "VOS garm ${VERSION}"
+if (( tag_exists )); then
+  echo "release.sh: tag ${tag} already created, skipping"
+else
+  git tag -a "${tag}" -m "VOS garm ${VERSION}"
+fi
 
 send_feishu() {
   local webhook="${FEISHU_WEBHOOK:-}"

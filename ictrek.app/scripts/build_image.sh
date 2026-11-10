@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 构建并推送 garm 镜像。镜像 tag 取版本号的 <DATE>.<GITSHA> 两段。
+# 构建并推送 garm 镜像。推送用 manifest list，tag 取版本号的 <DATE>.<GITSHA> 两段。
+# 本地构建（--no-push）的 tag 带架构前缀，由 image-ref.sh 生成。
 #
 # 用法：build_image.sh [--version <version>] [--no-push]
 #   --no-push  只在本机构建并加载镜像，不推送仓库
@@ -61,7 +62,8 @@ mirror_args=()
 
 if (( no_push )); then
   # 单平台才能 --load，本地 tag 不带仓库前缀，避免误以为镜像已推送。
-  image="garm:${image_tag}"
+  # tag 带架构前缀，便于在 docker images 中区分 amd 与 arm。
+  image="$("${script_dir}/image-ref.sh" --version "${version}")"
   platform_args=()
   output_args=(--load)
   echo "build_image.sh: building ${image} for the local platform as ${version}"
