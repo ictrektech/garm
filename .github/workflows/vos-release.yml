@@ -37,25 +37,6 @@ jobs:
           [[ "$head_sha" == "${{ steps.version.outputs.sha }}"* ]] \
             || { echo "HEAD $head_sha does not match version sha"; exit 1; }
 
-      - name: Login to registry
-        env:
-          REGISTRY: swr.cn-southwest-2.myhuaweicloud.com
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        if: env.REGISTRY_USERNAME != ''
-        run: |
-          set -euo pipefail
-          echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
-
-      - name: Verify image exists
-        env:
-          IMAGE_REPO: swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm
-        run: |
-          set -euo pipefail
-          image="${IMAGE_REPO}:${{ steps.version.outputs.image_tag }}"
-          docker manifest inspect "$image" > /dev/null || { echo "missing image: $image"; exit 1; }
-          echo "verified $image"
-
       - name: Build pull package
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.version }}
