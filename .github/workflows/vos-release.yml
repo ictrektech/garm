@@ -125,7 +125,7 @@ jobs:
           done
           [[ "$ready" == true ]] || { echo "app store tunnel not ready" >&2; exit 1; }
 
-          response="$(curl -kfsS -F "package=@${PACKAGE}" -F "force=true" -F "channel=stable" \
+          response="$(curl -kfsS -F "package=@${PACKAGE}" -F "force=true" -F "channel=rolling" \
             "http://127.0.0.1:18899/api/appstore/apps")"
           RESPONSE="$response" python3 - <<'PY'
           import json, os, sys
