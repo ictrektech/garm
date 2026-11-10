@@ -9,3 +9,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    # 本仓库只用于发布 VOS App，不跟踪上游依赖更新。
+    # 0 表示不再为依赖新版本开 PR；安全更新不受此限制。
+    open-pull-requests-limit: 0
