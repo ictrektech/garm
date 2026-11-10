@@ -25,7 +25,9 @@ BASE_PATH="$(cat "${app_dir}/src/garm/base-path")"
 # 可选：构建期源加速，留空时用官方源。
 APK_MIRROR="${APK_MIRROR:-}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
-GITHUB_PROXY="${GITHUB_PROXY:-}"
+# 未设置时用公共代理。国内直连 github.com 常超时，单次克隆会等上百秒。
+# 需要直连时显式传 GITHUB_PROXY= （空值）。
+GITHUB_PROXY="${GITHUB_PROXY-https://gh-proxy.com}"
 no_push=0
 no_feishu=0
 

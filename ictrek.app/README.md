@@ -62,11 +62,16 @@ git push origin main vos-garm-v<版本>         # 公开，触发 CI
 ```bash
 APK_MIRROR=https://mirrors.aliyun.com/alpine \
 NPM_REGISTRY=https://registry.npmmirror.com \
-GITHUB_PROXY=https://gh-proxy.example.com \
 ./ictrek.app/scripts/release.sh --no-push --no-feishu
 ```
 
-`GITHUB_PROXY` 只影响构建期克隆 provider 仓库。provider 克隆用 `--depth 1`，失败自动重试 3 次。
+`GITHUB_PROXY` 只影响构建期查询 release 与克隆 provider 仓库，默认 `https://gh-proxy.com`。国内直连 `github.com` 常超时，单次克隆会等上百秒。需要直连时显式传空值：
+
+```bash
+GITHUB_PROXY= ./ictrek.app/scripts/release.sh
+```
+
+provider 克隆用 `--depth 1`，失败自动重试 3 次。
 
 Docker Hub 由宿主机 `registry-mirrors` 加速，脚本不处理。
 
