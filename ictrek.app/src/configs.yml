@@ -9,3 +9,31 @@ configs:
       en: One of debug, info, warn, error.
     default: info
     enum: [debug, info, warn, error]
+  - name: GARM_LXD_INSTANCE_TYPE
+    type: string
+    title:
+      zh-CN: LXD 运行器类型
+      en: LXD runner instance type
+    description:
+      zh-CN: container 启动快、开销小；virtual-machine 需要宿主机支持 KVM。
+      en: container starts fast and is lightweight; virtual-machine needs KVM on the host.
+    default: container
+    enum: [container, virtual-machine]
+  - name: GARM_LXD_PROJECT
+    type: string
+    title:
+      zh-CN: LXD 项目
+      en: LXD project
+    description:
+      zh-CN: 运行器使用的 LXD 项目名，需提前在宿主机创建。
+      en: LXD project used for runners. It must exist on the host.
+    default: default
+  - name: GARM_LXD_SOCKET_PATH
+    type: string
+    title:
+      zh-CN: LXD socket 路径
+      en: LXD socket path
+    description:
+      zh-CN: 宿主机上的 LXD unix socket，同时挂载进容器。snap 安装为 /var/snap/lxd/common/lxd/unix.socket，deb 安装为 /var/lib/lxd/unix.socket。
+      en: LXD unix socket on the host, also mounted into the container. snap installs at /var/snap/lxd/common/lxd/unix.socket, deb at /var/lib/lxd/unix.socket.
+    default: /var/snap/lxd/common/lxd/unix.socket

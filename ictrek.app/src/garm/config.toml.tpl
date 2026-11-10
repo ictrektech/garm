@@ -25,3 +25,11 @@ time_to_live = "8760h"
   passphrase = "__DB_PASSPHRASE__"
   [database.sqlite3]
     db_file = "/data/garm.db"
+
+[[provider]]
+  name = "lxd"
+  provider_type = "external"
+  description = "Local LXD installation"
+  [provider.external]
+    provider_executable = "/opt/garm/providers.d/garm-provider-lxd"
+    config_file = "/data/garm-provider-lxd.toml"

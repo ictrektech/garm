@@ -7,10 +7,15 @@ services:
       - vos_default
     environment:
       GARM_LOG_LEVEL: ${GARM_LOG_LEVEL:-info}
+      GARM_LXD_INSTANCE_TYPE: ${GARM_LXD_INSTANCE_TYPE:-container}
+      GARM_LXD_PROJECT: ${GARM_LXD_PROJECT:-default}
+      GARM_LXD_SOCKET_PATH: ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
       VOS_APP_STORAGE_PATH: ${VOS_APP_STORAGE_PATH}
     volumes:
       - ${VOS_APP_STORAGE_PATH}/garm:/data
       - ./garm:/etc/garm:ro
+      # LXD unix socket, so the bundled garm-provider-lxd can talk to the host.
+      - ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}:${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
     labels:
       - "io.ictrek.version=__APP_VERSION__"
       - "traefik.enable=true"
