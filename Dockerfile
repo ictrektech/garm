@@ -53,6 +53,8 @@ RUN cd /build/garm/cmd/garm-cli \
       . && upx /bin/garm-cli
 # Only the providers used by this build are compiled. Add repositories here when
 # runners are also managed on other platforms.
+# 非 main 的 GARM_REF 会查询各仓库的 latest release。GitHub API 未认证时限流，
+# 查询失败时退回 main 分支，避免用 --branch null 克隆后必然失败。
 RUN set -ex; \
     mkdir -p /opt/garm/providers.d; \
     GITHUB_URL="https://github.com"; \
@@ -70,7 +72,11 @@ RUN set -ex; \
         if [ "$GARM_REF" = "main" ]; then \
           export PROVIDER_REF="main"; \
         else \
-          export PROVIDER_REF="$(curl -sS --retry 3 -L "$API_URL/repos/$repo/releases/latest" | jq -r '.tag_name')"; \
+          export PROVIDER_REF="$(curl -sS --retry 3 -L -f "$API_URL/repos/$repo/releases/latest" 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null || true)"; \
+          if [ -z "$PROVIDER_REF" ] || [ "$PROVIDER_REF" = "null" ]; then \
+            echo "no release tag for $repo, falling back to main"; \
+            export PROVIDER_REF="main"; \
+          fi; \
         fi; \
         for attempt in 1 2 3; do \
           rm -rf "/build/$PROVIDER_NAME"; \
