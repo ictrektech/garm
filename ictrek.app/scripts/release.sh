@@ -56,7 +56,13 @@ else
 fi
 
 echo
-echo "release.sh: 下一步"
-echo "  1. 提交 ictrek.app/image-tags 和代码改动"
-echo "  2. 在另一种架构的机器上运行本脚本，或使用已推送的 tag"
+if (( no_push )); then
+  echo "release.sh: local image only; nothing pushed and ictrek.app/image-tags is unchanged"
+  echo "release.sh: run without --no-push to publish the image"
+  exit 0
+fi
+
+echo "release.sh: next steps"
+echo "  1. run this script on the other architecture host from the same commit"
+echo "  2. commit ictrek.app/image-tags and your code changes"
 echo "  3. ./ictrek.app/scripts/update_version.sh"
