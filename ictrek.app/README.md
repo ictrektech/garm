@@ -31,7 +31,8 @@ GARM 的 VOS 交付定义。
 - `<上游版本>`：HEAD 上最近的稳定上游 tag，去掉 `v`。
 - `<DATE>`：`Asia/Shanghai` 的 `YYYYMMDD`。
 - `<N>`：远端同名日期 tag 的最大序号加一。
-- `<GITSHA>`：8 位起，遇前导零加长。
+- `<GITSHA>`：最后一次改动 `ictrek.app/` 以外路径的提交，8 位起，遇前导零加长。
+- 只改 `ictrek.app/` 的发布中，`<GITSHA>` 停在上一个代码提交，与镜像 tag 里的 SHA 相同。
 
 推送的镜像 tag 带架构前缀，格式为 `<arch>_v<版本>`，与飞书发布表的值逐字相同：
 

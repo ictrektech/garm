@@ -5,7 +5,8 @@
 #   <核心版本>  取 HEAD 上最近的稳定上游 tag，去掉 v
 #   <DATE>      Asia/Shanghai 的 YYYYMMDD
 #   <N>         远端同名日期 tag 的最大序号加一；失败不消耗序号
-#   <GITSHA>    git-sha.sh 输出
+#   <GITSHA>    最近一次改动 ictrek.app/ 以外路径的提交，git-sha.sh 输出。
+#               只改 ictrek.app/ 时它停在上一个代码提交，与镜像 tag 的 SHA 相同。
 #
 # 用法：version.sh [--offline]
 #   --offline  改用本地 tag 计算 <N>，用于无网络时预览，不用于正式发布
@@ -35,7 +36,10 @@ if ! [[ "${core}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 date="$(TZ='Asia/Shanghai' date +%Y%m%d)"
-sha="$("${script_dir}/git-sha.sh")"
+# 镜像内容只由 ictrek.app/ 以外的路径决定，SHA 取这些路径的最后一次提交。
+code_sha="$(git -C "${repo_root}" log -1 --format=%H -- . ':(exclude)ictrek.app' 2>/dev/null || true)"
+[[ -n "${code_sha}" ]] || code_sha="$(git -C "${repo_root}" rev-parse HEAD)"
+sha="$(GIT_SHA_BASE="${code_sha}" "${script_dir}/git-sha.sh")"
 if [[ "${sha}" == "unknown" ]]; then
   echo "version.sh: cannot resolve HEAD sha" >&2
   exit 1

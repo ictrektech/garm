@@ -32,9 +32,11 @@ jobs:
       - name: Verify commit matches version
         run: |
           set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
-          [[ "$head_sha" == "${{ steps.version.outputs.sha }}"* ]] \
-            || { echo "HEAD $head_sha does not match version sha"; exit 1; }
+          # 版本里的 SHA 是最后一次改动 ictrek.app/ 以外路径的提交，不是 tag 指向的提交。
+          code_sha="$(git log -1 --format=%H -- . ':(exclude)ictrek.app')"
+          [[ -n "$code_sha" ]] || code_sha="$(git rev-parse HEAD)"
+          [[ "$code_sha" == "${{ steps.version.outputs.sha }}"* ]] \
+            || { echo "code commit $code_sha does not match version sha"; exit 1; }
 
       - name: Build pull package
         env:
