@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"gorm.io/gorm"
 
@@ -160,6 +161,56 @@ func (s *sqlDatabase) GetAdminUser(_ context.Context) (params.User, error) {
 			return params.User{}, runnerErrors.ErrNotFound
 		}
 		return params.User{}, fmt.Errorf("error fetching admin user: %w", q.Error)
+	}
+	return s.sqlToParamsUser(user), nil
+}
+
+// The VOS package runs a single controller. Serialize enrollment, renames and role
+// changes to keep identity binding consistent under simultaneous browser requests.
+var vosUserSyncMu sync.Mutex
+
+func (s *sqlDatabase) SyncVOSUser(ctx context.Context, subject string, profile params.NewUserParams) (params.User, error) {
+	vosUserSyncMu.Lock()
+	defer vosUserSyncMu.Unlock()
+
+	var user User
+	err := s.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("vos_subject = ?", subject).First(&user)
+		newUser := errors.Is(result.Error, gorm.ErrRecordNotFound)
+		if result.Error != nil && !newUser {
+			return result.Error
+		}
+
+		var collision User
+		result = tx.Where("username = ?", profile.Username).First(&collision)
+		if result.Error == nil && (newUser || collision.ID != user.ID) {
+			if collision.VOSSubject != nil {
+				return runnerErrors.NewConflictError("VOS username is already bound to another account")
+			}
+			// The old integration had no subject binding. Keep the legacy row
+			// and its ID, but never transfer it or its privileges by name alone.
+			if err := tx.Model(&collision).Updates(map[string]any{
+				"username": "~vos-legacy-" + collision.ID.String(),
+				"is_admin": false, "enabled": false, "generation": collision.Generation + 1,
+			}).Error; err != nil {
+				return err
+			}
+		} else if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return result.Error
+		}
+
+		if newUser {
+			user.VOSSubject = &subject
+			user.Email = profile.Email
+		} else if user.IsAdmin != profile.IsAdmin || user.Enabled != profile.Enabled {
+			user.Generation++
+		}
+		user.Username, user.FullName = profile.Username, profile.FullName
+		user.IsAdmin, user.Enabled = profile.IsAdmin, profile.Enabled
+		return tx.Save(&user).Error
+	})
+	if err != nil {
+		return params.User{}, fmt.Errorf("synchronizing VOS account: %w", err)
 	}
 	return s.sqlToParamsUser(user), nil
 }

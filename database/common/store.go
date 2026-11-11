@@ -82,6 +82,7 @@ type PoolStore interface {
 }
 
 type UserStore interface {
+	SyncVOSUser(ctx context.Context, subject string, profile params.NewUserParams) (params.User, error)
 	GetUser(ctx context.Context, user string) (params.User, error)
 	GetUserByID(ctx context.Context, userID string) (params.User, error)
 	GetAdminUser(ctx context.Context) (params.User, error)

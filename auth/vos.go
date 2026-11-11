@@ -16,18 +16,15 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
+	"os"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 
 	runnerErrors "github.com/cloudbase/garm-provider-common/errors"
 	runnerParams "github.com/cloudbase/garm/params"
@@ -46,14 +43,16 @@ const (
 	maxUsernameLength  = 64
 )
 
-// vosUsernameUnsafe matches everything the GARM users table does not accept.
-var vosUsernameUnsafe = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
-
 type vosIdentity struct {
 	Subject  string
 	Username string
-	Email    string
 	FullName string
+	IsAdmin  bool
+	Enabled  bool
+}
+
+func vosAuthEnabled() bool {
+	return os.Getenv("GARM_VOS_AUTH_ENABLED") == "true"
 }
 
 // VOSUserInfoURL returns the configured userinfo endpoint.
@@ -73,18 +72,6 @@ func claimValue(claims map[string]any, names ...string) string {
 		}
 	}
 	return ""
-}
-
-func sanitizeVOSUsername(raw string) (string, error) {
-	name := vosUsernameUnsafe.ReplaceAllString(raw, "-")
-	name = strings.Trim(name, "-")
-	if name == "" {
-		return "", fmt.Errorf("empty username after sanitizing %q", raw)
-	}
-	if len(name) > maxUsernameLength {
-		name = name[:maxUsernameLength]
-	}
-	return name, nil
 }
 
 func parseVOSUserInfo(body []byte) (vosIdentity, error) {
@@ -110,27 +97,32 @@ func parseVOSUserInfo(body []byte) (vosIdentity, error) {
 	}
 
 	subject := claimValue(claims, "sub", "id", "user_id")
-	username := claimValue(claims, "preferred_username", "username", "nickname", "name", "email")
-	if subject == "" {
-		return vosIdentity{}, errors.New("userinfo is missing subject")
+	username := claimValue(claims, "preferred_username", "username")
+	if subject == "" || len(subject) > 128 {
+		return vosIdentity{}, errors.New("userinfo subject is missing or too long")
 	}
 	if username == "" {
 		return vosIdentity{}, errors.New("userinfo is missing username")
 	}
 
-	safeUsername, err := sanitizeVOSUsername(username)
-	if err != nil {
-		return vosIdentity{}, err
+	// VOS application tokens use the application ID for both fields. They
+	// are service identities even when the gateway reports an admin role.
+	if subject == username {
+		return vosIdentity{}, errors.New("userinfo is not a VOS user account")
+	}
+	if len(username) > maxUsernameLength {
+		return vosIdentity{}, errors.New("userinfo username exceeds GARM's account name limit")
 	}
 
 	identity := vosIdentity{
 		Subject:  subject,
-		Username: safeUsername,
-		Email:    claimValue(claims, "email"),
-		FullName: claimValue(claims, "name", "preferred_username", "username", "nickname"),
+		Username: username,
+		FullName: claimValue(claims, "nickname", "name", "preferred_username", "username"),
+		IsAdmin:  claimValue(claims, "role_code") == "system_admin",
+		Enabled:  claims["enable"] == float64(1),
 	}
 	if identity.FullName == "" {
-		identity.FullName = safeUsername
+		identity.FullName = username
 	}
 	return identity, nil
 }
@@ -143,7 +135,7 @@ func fetchVOSIdentity(ctx context.Context, accessToken, userinfoURL string) (vos
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: vosUserInfoTimeout}
+	client := &http.Client{Timeout: vosUserInfoTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	if err != nil {
 		return vosIdentity{}, fmt.Errorf("calling VOS userinfo: %w", err)
@@ -160,70 +152,31 @@ func fetchVOSIdentity(ctx context.Context, accessToken, userinfoURL string) (vos
 	return parseVOSUserInfo(body)
 }
 
-func randomPassword() (string, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generating password: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(raw), nil
-}
-
-// AuthenticateVOSUser validates a VOS OIDC access token and returns a context
-// populated with the matching GARM user. The first VOS user becomes the GARM
-// administrator so that a fresh deployment can be used without the first-run
-// wizard.
-func (a *Authenticator) AuthenticateVOSUser(ctx context.Context, accessToken, userinfoURL string) (context.Context, error) {
-	if strings.TrimSpace(accessToken) == "" {
-		return ctx, runnerErrors.ErrUnauthorized
+// AuthenticateVOSUser validates an enabled VOS account and synchronizes its GARM identity.
+func (a *Authenticator) AuthenticateVOSUser(ctx context.Context, accessToken, userinfoURL string) (context.Context, runnerParams.User, error) {
+	if !vosAuthEnabled() || strings.TrimSpace(accessToken) == "" {
+		return ctx, runnerParams.User{}, runnerErrors.ErrUnauthorized
 	}
 	if userinfoURL == "" {
 		userinfoURL = DefaultVOSUserInfoURL
 	}
-
 	identity, err := fetchVOSIdentity(ctx, accessToken, userinfoURL)
-	if err != nil {
-		return ctx, runnerErrors.ErrUnauthorized
+	if err != nil || !identity.Enabled {
+		return ctx, runnerParams.User{}, runnerErrors.ErrUnauthorized
 	}
 
-	user, err := a.store.GetUser(ctx, identity.Username)
-	if err != nil {
-		if !errors.Is(err, runnerErrors.ErrNotFound) {
-			return ctx, fmt.Errorf("looking up user %s: %w", identity.Username, err)
-		}
-		user, err = a.createVOSUser(ctx, identity)
-		if err != nil {
-			return ctx, err
-		}
-	}
-
-	if !user.Enabled {
-		return ctx, runnerErrors.ErrUnauthorized
-	}
-	return PopulateContext(ctx, user, nil), nil
-}
-
-func (a *Authenticator) createVOSUser(ctx context.Context, identity vosIdentity) (runnerParams.User, error) {
-	password, err := randomPassword()
-	if err != nil {
-		return runnerParams.User{}, err
-	}
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return runnerParams.User{}, fmt.Errorf("hashing password: %w", err)
-	}
-
-	email := strings.TrimSpace(identity.Email)
-	if email == "" {
-		email = fmt.Sprintf("%s@garm.local", identity.Username)
-	}
-
-	newUser := runnerParams.NewUserParams{
+	// VOS accounts authenticate only through SSO. Derive an internal unique
+	// email from the subject so shared or changed email addresses cannot link accounts.
+	digest := sha256.Sum256([]byte(identity.Subject))
+	user, err := a.store.SyncVOSUser(ctx, identity.Subject, runnerParams.NewUserParams{
 		Username: identity.Username,
-		Email:    email,
+		Email:    fmt.Sprintf("%x@vos.invalid", digest),
 		FullName: identity.FullName,
-		Password: string(hashed),
-		IsAdmin:  !a.store.HasAdminUser(ctx),
+		IsAdmin:  identity.IsAdmin,
 		Enabled:  true,
+	})
+	if err != nil {
+		return ctx, runnerParams.User{}, err
 	}
-	return a.store.CreateUser(ctx, newUser)
+	return PopulateContext(ctx, user, nil), user, nil
 }

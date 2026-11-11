@@ -91,17 +91,18 @@ export const auth = {
 	// Sign in through the VOS OIDC bridge. Returns false outside VOS or when
 	// GARM rejects the VOS access token.
 	async loginWithVOS(): Promise<boolean> {
-		const token = await tryVOSLogin();
-		if (!token) return false;
+		const session = await tryVOSLogin();
+		if (!session) return false;
+		const { token, username } = session;
 
 		if (browser) {
 			setCookie('garm_token', token);
-			setCookie('garm_user', 'vos');
+			setCookie('garm_user', username);
 		}
 		garmApi.setToken(token);
 		authStore.set({
 			isAuthenticated: true,
-			user: 'vos',
+			user: username,
 			loading: false,
 			needsInitialization: false
 		});
@@ -130,7 +131,16 @@ export const auth = {
 
 		authStore.update(state => ({ ...state, loading: true }));
 
-		// 1. Reuse an existing session cookie.
+		// Refresh identity on each entry in the VOS shell, including after
+		// switching VOS users or when an existing user's role changes.
+		if (window.parent !== window && APP_BASE_PATH === '/app/com.ictrek.garm') {
+			if (await auth.loginWithVOS()) return;
+			auth.logout();
+			garmApi.setToken('');
+			return;
+		}
+
+		// Reuse an existing standalone session cookie.
 		const token = getCookie('garm_token');
 		const user = getCookie('garm_user');
 		if (token && user) {

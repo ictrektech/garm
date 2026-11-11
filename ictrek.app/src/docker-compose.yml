@@ -5,6 +5,7 @@ x-garm: &garm
     vos_default:
       aliases: [garm]
   environment:
+    GARM_VOS_AUTH_ENABLED: "true"
     GARM_VOS_USERINFO_URL: http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo
     GARM_LOG_LEVEL: ${GARM_LOG_LEVEL:-info}
     GARM_LXD_INSTANCE_TYPE: ${GARM_LXD_INSTANCE_TYPE:-container}

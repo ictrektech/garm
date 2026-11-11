@@ -77,8 +77,8 @@ func (amw *jwtMiddleware) claimsToContext(ctx context.Context, claims *JWTClaims
 		expiresAt = &expires
 	}
 
-	if userInfo.Generation != claims.Generation {
-		// Password was reset since token was issued. Invalidate.
+	if !userInfo.Enabled || (vosAuthEnabled() && !userInfo.VOSManaged) || userInfo.Generation != claims.Generation {
+		// Reject disabled, legacy or superseded sessions.
 		return ctx, runnerErrors.ErrUnauthorized
 	}
 

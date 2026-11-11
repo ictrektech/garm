@@ -11,13 +11,17 @@ Install GARM from VOS App Store and select the AMD64 or ARM64 profile for the de
 - UI: `/app/com.ictrek.garm/ui/`
 - Opened inside VOS, the UI uses VOS single sign-on. No manual credentials are needed.
 
-## Login
+## VOS accounts and roles
 
-- The UI runs the OIDC PKCE flow through `window.vos_platform.api.v1000.oauth2`.
-- The backend exchanges the VOS access token on `POST /api/v1/auth/vos`.
-- The userinfo endpoint defaults to `http://172.17.0.1:8105/v1000/oauth2/userinfo` and can be overridden with `GARM_VOS_USERINFO_URL`.
-- The first VOS user becomes the GARM administrator.
-- Local accounts still work when the UI is opened outside VOS.
+Open GARM from VOS App Drawer to sign in automatically. GARM links accounts by VOS user ID and creates a GARM account with the VOS username on first access. Reopening the app synchronizes the username and role while retaining the linked GARM account ID. The VOS `system_admin` role grants GARM administrator access to the built-in admin and other VOS system administrators. Other VOS roles sign in as regular users. Multiple VOS administrators can manage GARM.
+
+VOS installations use VOS sign-in exclusively. After upgrading, sessions for older unlinked accounts must sign in again. If an unlinked account already uses the same username, GARM retains and disables that record and creates a separate account for the VOS user. Once a role change has synchronized, sessions issued before the change are rejected. Standalone installations retain GARM's local sign-in and initialization.
+
+### VOS sign-in API
+
+`POST /app/com.ictrek.garm/api/v1/auth/vos` accepts JSON `{"access_token":"<VOS OAuth2 access token>"}`. Obtain the token via VOS OAuth2 with PKCE for an enabled VOS user. A successful request returns HTTP 200 and `{"token":"<GARM JWT>","username":"<VOS username>"}`. Use `Authorization: Bearer <GARM JWT>` for subsequent management requests.
+
+HTTP 400 indicates invalid JSON or a missing token. HTTP 401 indicates an invalid token, an unavailable account or disabled VOS authentication. HTTP 409 indicates the username is already bound to a different VOS user. Other storage failures return HTTP 500. For a 401, reopen the app from VOS. For a 409, ask the administrator to check the conflicting account binding.
 
 ## Configuration
 

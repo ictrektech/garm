@@ -78,7 +78,7 @@ function randomBase64UrlFromBytes(bytes: Uint8Array): string {
  * Exchanges a VOS access token for a GARM JWT.
  * Returns null when GARM rejects the token.
  */
-export async function tryVOSLogin(): Promise<string | null> {
+export async function tryVOSLogin(): Promise<{ token: string; username: string } | null> {
 	if (!browser) return null;
 	try {
 		const accessToken = await requestVOSAccessToken();
@@ -92,8 +92,8 @@ export async function tryVOSLogin(): Promise<string | null> {
 		});
 		if (!response.ok) return null;
 
-		const payload = (await response.json()) as { token?: string };
-		return payload.token ?? null;
+		const payload = (await response.json()) as { token?: string; username?: string };
+		return payload.token && payload.username ? { token: payload.token, username: payload.username } : null;
 	} catch {
 		return null;
 	}

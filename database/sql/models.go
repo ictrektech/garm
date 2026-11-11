@@ -390,6 +390,7 @@ type User struct {
 	Email      string `gorm:"type:varchar(254);unique;index:idx_email"`
 	Password   string `gorm:"type:varchar(60)"`
 	Generation uint
+	VOSSubject *string `gorm:"type:varchar(128);uniqueIndex"`
 	IsAdmin    bool
 	Enabled    bool
 }

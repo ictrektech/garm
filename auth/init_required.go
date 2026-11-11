@@ -39,7 +39,7 @@ func (i *initRequired) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		if !i.store.HasAdminUser(ctx) {
+		if !vosAuthEnabled() && !i.store.HasAdminUser(ctx) {
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
 			if err := json.NewEncoder(w).Encode(params.InitializationRequired); err != nil {

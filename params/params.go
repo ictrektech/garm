@@ -977,6 +977,7 @@ type User struct {
 	// Do not serialize sensitive info.
 	Password   string `json:"-"`
 	Generation uint   `json:"-"`
+	VOSManaged bool   `json:"-"`
 }
 
 // JWTResponse holds the JWT token returned as a result of a

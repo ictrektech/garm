@@ -11,13 +11,17 @@
 - 页面：`/app/com.ictrek.garm/ui/`
 - 在 VOS 中打开时使用 VOS 单点登录，不需要手动输入账号密码。
 
-## 登录
+## VOS 账户和权限
 
-- 前端通过 `window.vos_platform.api.v1000.oauth2` 走 PKCE 授权码流程，取得 VOS 访问令牌。
-- 后端用 `POST /api/v1/auth/vos` 换取 GARM 令牌。
-- VOS 安装包从平台网关配置生成令牌校验地址。独立部署可用 `GARM_VOS_USERINFO_URL` 指定。
-- 第一个登录的 VOS 用户自动成为 GARM 管理员。
-- 不通过 VOS 访问时，仍然可以使用本地账号登录。
+从 VOS 应用抽屉打开时自动单点登录。GARM 按 VOS 用户 ID 关联账号，首次访问创建与 VOS 同名的账户。再次打开时同步用户名和角色，保留已绑定账户的 GARM ID。VOS `system_admin`（包括 admin 和其他系统管理员）拥有 GARM 管理权限，其他 VOS 角色按普通用户处理。多位 VOS 系统管理员可以同时管理 GARM。
+
+VOS 部署仅使用 VOS 登录。升级后，旧版本未绑定 VOS 身份的会话需要重新登录。若存在同名未绑定账户，GARM 保留并停用该记录，为 VOS 用户创建独立账户。角色变更同步后，变更前签发的 GARM 会话失效。独立部署仍使用 GARM 原有的本地登录和初始化。
+
+### VOS 登录 API
+
+`POST /app/com.ictrek.garm/api/v1/auth/vos` 接收 JSON `{"access_token":"<VOS OAuth2 访问令牌>"}`。令牌通过 VOS 的 OAuth2 PKCE 登录获得，代表已启用的 VOS 用户。成功时返回 HTTP 200 及 `{"token":"<GARM JWT>","username":"<VOS 用户名>"}`。后续管理 API 使用 `Authorization: Bearer <GARM JWT>`。
+
+HTTP 400 表示 JSON 无效或令牌缺失，401 表示令牌未通过验证、账户不可用或未启用 VOS 认证，409 表示用户名已绑定另一 VOS 用户。其他存储故障返回 500。遇到 401 时重新从 VOS 打开应用；遇到 409 时由管理员检查同名账户，避免按名称合并不同用户。
 
 ## 配置
 

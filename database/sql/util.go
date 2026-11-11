@@ -554,6 +554,7 @@ func (s *sqlDatabase) sqlToParamsUser(user User) params.User {
 		Enabled:    user.Enabled,
 		IsAdmin:    user.IsAdmin,
 		Generation: user.Generation,
+		VOSManaged: user.VOSSubject != nil,
 	}
 }
 

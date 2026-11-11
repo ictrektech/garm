@@ -44,7 +44,7 @@ type Authenticator struct {
 }
 
 func (a *Authenticator) IsInitialized() bool {
-	return a.store.HasAdminUser(context.Background())
+	return vosAuthEnabled() || a.store.HasAdminUser(context.Background())
 }
 
 func (a *Authenticator) GetJWTToken(ctx context.Context) (string, error) {
@@ -52,7 +52,13 @@ func (a *Authenticator) GetJWTToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error generating random string: %w", err)
 	}
-	expireToken := time.Now().Add(a.cfg.TimeToLive.Duration())
+	ttl := a.cfg.TimeToLive.Duration()
+	// VOS tokens have a one-hour lifetime. Do not turn them into long-lived
+	// administrator sessions by applying the standalone controller lifetime.
+	if vosAuthEnabled() && ttl > time.Hour {
+		ttl = time.Hour
+	}
+	expireToken := time.Now().Add(ttl)
 	expires := &jwt.NumericDate{
 		Time: expireToken,
 	}
@@ -119,6 +125,9 @@ func (a *Authenticator) GetJWTMetricsToken(ctx context.Context) (string, error) 
 }
 
 func (a *Authenticator) InitController(ctx context.Context, param params.NewUserParams) (params.User, error) {
+	if vosAuthEnabled() {
+		return params.User{}, runnerErrors.ErrUnauthorized
+	}
 	_, err := a.store.ControllerInfo()
 	if err != nil {
 		if !errors.Is(err, runnerErrors.ErrNotFound) {
@@ -161,6 +170,9 @@ func (a *Authenticator) InitController(ctx context.Context, param params.NewUser
 }
 
 func (a *Authenticator) AuthenticateUser(ctx context.Context, info params.PasswordLoginParams) (context.Context, error) {
+	if vosAuthEnabled() {
+		return ctx, runnerErrors.ErrUnauthorized
+	}
 	if info.Username == "" || info.Password == "" {
 		return ctx, runnerErrors.ErrUnauthorized
 	}

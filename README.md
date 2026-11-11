@@ -48,7 +48,8 @@ GARM supports two scaling modes:
 
 See the [VOS application packaging guide](ictrek.app/README.md) and the
 [VOS user guide](ictrek.app/src/README.en.md). Select the profile that matches
-your device architecture when installing from VOS App Store.
+your device architecture when installing from VOS App Store. VOS sign-in
+links accounts by VOS user ID and synchronizes usernames and administrator roles.
 
 ## Getting started
 

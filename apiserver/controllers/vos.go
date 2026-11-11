@@ -40,7 +40,7 @@ func vosUserInfoURL() string {
 // VOSLoginHandler exchanges a VOS OIDC access token for a GARM JWT.
 //
 // The endpoint is deliberately not guarded by the initialization middleware:
-// on a fresh deployment the first VOS user becomes the GARM administrator.
+// a fresh deployment provisions users directly from VOS.
 func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var loginInfo vosLoginParams
@@ -53,7 +53,7 @@ func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ctx, err := a.auth.AuthenticateVOSUser(ctx, loginInfo.AccessToken, vosUserInfoURL())
+	ctx, user, err := a.auth.AuthenticateVOSUser(ctx, loginInfo.AccessToken, vosUserInfoURL())
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -65,7 +65,10 @@ func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(runnerParams.JWTResponse{Token: tokenString}); err != nil {
+	if err := json.NewEncoder(w).Encode(struct {
+		runnerParams.JWTResponse
+		Username string `json:"username"`
+	}{JWTResponse: runnerParams.JWTResponse{Token: tokenString}, Username: user.Username}); err != nil {
 		slog.With(slog.Any("error", err)).ErrorContext(ctx, "failed to encode response")
 	}
 }
