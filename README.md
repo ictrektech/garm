@@ -44,6 +44,12 @@ GARM supports two scaling modes:
 > [!CAUTION]
 > The `main` branch holds the latest code and is not guaranteed to be stable. If you are looking for a stable release, please check the releases page. If you plan to use the `main` branch, please do so on a new instance. Do not upgrade from a stable release to `main`.
 
+## VOS
+
+See the [VOS application packaging guide](ictrek.app/README.md) and the
+[VOS user guide](ictrek.app/src/README.en.md). Select the profile that matches
+your device architecture when installing from VOS App Store.
+
 ## Getting started
 
 Pick the quickstart that matches your setup:

@@ -2,6 +2,10 @@
 
 Self-hosted runner manager for GitHub Actions and Gitea Actions.
 
+## Install
+
+Install GARM from VOS App Store and select the AMD64 or ARM64 profile for the device. Initialize LXD on the host before creating runners. GARM uses English labels inside the management UI.
+
 ## Access
 
 - UI: `/app/com.ictrek.garm/ui/`

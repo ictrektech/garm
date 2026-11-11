@@ -18,6 +18,7 @@ RUN npm run build
 # Stage 2: Build Go binaries
 FROM docker.io/golang:alpine AS builder
 ARG GARM_REF
+ARG GARM_SOURCE_VERSION
 # Alpine mirror used for the builder stage. Override with --build-arg APK_MIRROR=
 # when building outside mainland China.
 ARG APK_MIRROR=https://mirrors.aliyun.com/alpine
@@ -36,7 +37,7 @@ RUN echo ${GARM_REF}
 
 ADD . /build/garm
 
-RUN git -C /build/garm checkout ${GARM_REF}
+RUN if [ -z "${GARM_SOURCE_VERSION}" ]; then git -C /build/garm checkout "${GARM_REF}"; fi
 
 # Copy webapp build output to assets directory (after git checkout to override any checked-in assets)
 COPY --from=webapp /build/webapp/build/ /build/garm/webapp/assets/
@@ -44,12 +45,12 @@ COPY --from=webapp /build/webapp/build/ /build/garm/webapp/assets/
 RUN cd /build/garm \
     && go build -o /bin/garm \
       -tags osusergo,netgo,sqlite_omit_load_extension \
-      -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=$(git describe --tags --match='v[0-9]*' --dirty --always)" \
+      -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=${GARM_SOURCE_VERSION:-$(git describe --tags --match='v[0-9]*' --dirty --always)}" \
       /build/garm/cmd/garm && upx /bin/garm
 RUN cd /build/garm/cmd/garm-cli \
     && go build -o /bin/garm-cli \
       -tags osusergo,netgo,sqlite_omit_load_extension \
-      -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=$(git describe --tags --match='v[0-9]*' --dirty --always)" \
+      -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=${GARM_SOURCE_VERSION:-$(git describe --tags --match='v[0-9]*' --dirty --always)}" \
       . && upx /bin/garm-cli
 # Only the providers used by this build are compiled. Add repositories here when
 # runners are also managed on other platforms.
@@ -80,11 +81,13 @@ RUN set -ex; \
         fi; \
         for attempt in 1 2 3; do \
           rm -rf "/build/$PROVIDER_NAME"; \
-          if git clone --depth 1 --branch "$PROVIDER_REF" "$GITHUB_URL/$repo" "/build/$PROVIDER_NAME"; then break; fi; \
-          echo "clone failed for $repo, attempt $attempt"; \
+          mkdir -p "/build/$PROVIDER_NAME"; \
+          if curl -fsSL --connect-timeout 15 --max-time 120 "$GITHUB_URL/$repo/archive/$PROVIDER_REF.tar.gz" -o /tmp/provider.tar.gz \
+              && tar -xzf /tmp/provider.tar.gz --strip-components=1 -C "/build/$PROVIDER_NAME"; then break; fi; \
+          echo "archive download failed for $repo, attempt $attempt"; \
           sleep 10; \
         done; \
-        test -d "/build/$PROVIDER_NAME/.git"; \
+        test -f "/build/$PROVIDER_NAME/go.mod"; \
         case $PROVIDER_NAME in \
         "garm-provider-k8s") \
             export PROVIDER_SUBDIR="cmd/garm-provider-k8s"; \
@@ -94,7 +97,7 @@ RUN set -ex; \
             export PROVIDER_LDFLAGS="-linkmode external -extldflags \"-static\" -s -w"; \
             ;; \
         *) \
-            export PROVIDER_VERSION=$(git -C /build/$PROVIDER_NAME describe --tags --match='v[0-9]*' --dirty --always); \
+            export PROVIDER_VERSION=$PROVIDER_REF; \
             export PROVIDER_LDFLAGS="-linkmode external -extldflags \"-static\" -s -w -X main.Version=$PROVIDER_VERSION"; \
             ;; \
         esac; \

@@ -37,6 +37,23 @@ jobs:
           [[ "$head_sha" == "${{ steps.version.outputs.sha }}"* ]] \
             || { echo "HEAD $head_sha does not match version sha"; exit 1; }
 
+      - name: Configure release spreadsheet credentials
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+        run: |
+          umask 077
+          python3 - <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+
+          config = {key.lower(): os.environ[key] for key in ("FEISHU_APP_ID", "FEISHU_APP_SECRET")}
+          if not all(config.values()):
+              raise SystemExit("Feishu release spreadsheet credentials are missing")
+          (Path.home() / ".feishu.components.json").write_text(json.dumps(config))
+          PYTHON
+
       - name: Build pull package
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.version }}

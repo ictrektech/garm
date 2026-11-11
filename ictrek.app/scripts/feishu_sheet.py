@@ -9,8 +9,8 @@
                   --value amd_v0.2.1_20261110.1.e8478193 [--date 20261110] [--dry-run]
 
 凭据来源（环境变量优先）：~/.feishu.json、FEISHU_CONFIG_FILE 指向的文件。
-字段：feishu_app_id、feishu_app_secret、feishu_spreadsheet_token。
-对应环境变量：FEISHU_APP_ID、FEISHU_APP_SECRET、FEISHU_SPREADSHEET_TOKEN。
+字段：feishu_app_id、feishu_app_secret。
+对应环境变量：FEISHU_APP_ID、FEISHU_APP_SECRET。
 """
 
 import argparse
@@ -59,13 +59,10 @@ def credentials():
     config = load_config(path)
     app_id = os.environ.get("FEISHU_APP_ID") or str(config.get("feishu_app_id") or "")
     app_secret = os.environ.get("FEISHU_APP_SECRET") or str(config.get("feishu_app_secret") or "")
-    spreadsheet = os.environ.get("FEISHU_SPREADSHEET_TOKEN") or str(
-        config.get("feishu_spreadsheet_token") or ""
-    )
+    spreadsheet = "Htotsn3oahO1zxt73YMcaB1zn8e"
     for name, value in (
         ("FEISHU_APP_ID", app_id),
         ("FEISHU_APP_SECRET", app_secret),
-        ("FEISHU_SPREADSHEET_TOKEN", spreadsheet),
     ):
         if not value:
             die("%s is empty; check %s" % (name, path))
@@ -170,7 +167,8 @@ def main():
     parser = argparse.ArgumentParser(add_help=True, description="write an image tag into the VOS release sheet")
     parser.add_argument("--sheet", required=True)
     parser.add_argument("--component", required=True)
-    parser.add_argument("--image", required=True)
+    parser.add_argument("--image")
+    parser.add_argument("--read", action="store_true")
     parser.add_argument("--value", required=True)
     parser.add_argument("--date", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -187,6 +185,22 @@ def main():
     letter = column_letter(index)
     row = date_row(token, spreadsheet, sheet, date)
 
+    if args.read:
+        if is_new or row is None:
+            die("missing %s image record for %s" % (args.sheet, date))
+        def read_cell(row_number):
+            cell = "%s%d" % (letter, row_number)
+            rows = read_values(token, spreadsheet, "%s!%s:%s" % (sheet, cell, cell))
+            return cell_text(rows[0][0]) if rows and rows[0] else ""
+        repo = read_cell(2)
+        tag = read_cell(row)
+        if not repo or tag != args.value:
+            die("expected tag %s in %s on %s" % (args.value, args.sheet, date))
+        print("%s:%s" % (repo, tag))
+        return
+
+    if not args.image:
+        parser.error("--image is required when writing")
     if args.dry_run:
         print(
             "feishu_sheet.py: dry run %s!%s%s = %s (column new: %s, date row new: %s)"
@@ -197,6 +211,10 @@ def main():
     if row is None:
         row = prepend_date(token, spreadsheet, sheet, date)
         print("feishu_sheet.py: inserted date row %s in %s" % (date, args.sheet))
+    if not is_new:
+        repo_rows = read_values(token, spreadsheet, "%s!%s2:%s2" % (sheet, letter, letter))
+        if not repo_rows or not repo_rows[0] or cell_text(repo_rows[0][0]) != args.image:
+            die("existing repository does not match %s in %s" % (args.component, args.sheet))
     if is_new:
         write_cell(token, spreadsheet, sheet, "%s1" % letter, args.component)
         write_cell(token, spreadsheet, sheet, "%s2" % letter, args.image)

@@ -12,7 +12,7 @@ GARM 的 VOS 交付定义。
 | `scripts/version.sh` | 生成版本串与镜像 tag |
 | `scripts/git-sha.sh` | 生成合法 SemVer 的短 SHA |
 | `scripts/image-ref.sh` | 生成本地镜像引用，带架构前缀 |
-| `scripts/build_image.sh` | 多架构构建并推送镜像 |
+| `scripts/build_image.sh` | 在对应架构的构建机上构建并推送单架构镜像 |
 | `scripts/package.sh` | 生成 pull 安装包 |
 | `scripts/feishu_sheet.py` | 把镜像 tag 写入 VOS 发布表 |
 | `scripts/release.sh` | 本地发布入口 |
@@ -31,54 +31,23 @@ GARM 的 VOS 交付定义。
 - `<N>`：远端同名日期 tag 的最大序号加一。
 - `<GITSHA>`：8 位起，遇前导零加长。
 
-推送的镜像 tag 只取后两段，即 `20261109.158fe569`，多架构共用这一个 manifest list。
+## 构建和发布
 
-本地构建（`--no-push`）的 tag 带架构前缀，格式为 `<arch>_v<版本>`，由 `scripts/image-ref.sh` 生成：
-
-```text
-garm:amd_v0.2.1_20261110.1.e8478193
-garm:arm_v0.2.1_20261110.1.e8478193
-```
-
-## 发布
+在本地选定已提交的版本，并将源码同步到 AMD64 和 ARM64 构建机。然后分别运行：
 
 ```bash
-./ictrek.app/scripts/release.sh              # 出镜像、出包、建本地 tag
-git push origin main vos-garm-v<版本>         # 公开，触发 CI
+./ictrek.app/scripts/build_image.sh --target amd --version <版本>
+./ictrek.app/scripts/build_image.sh --target arm --version <版本>
 ```
 
-`--no-push` 只构建本地镜像，不推送仓库。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 只出包，不建 tag。
+镜像分别使用 `amd_v<版本>` 和 `arm_v<版本>` tag，tag 内的连字符替换为下划线。脚本在推送前检查镜像架构和容器入口。推送成功后将 tag 分别写入飞书发布表 `AMD_with_cuda` 和 `ARM_without_cuda` 的 `garm` 列。写表凭据来自 `~/.feishu.json` 或 `FEISHU_CONFIG_FILE`。
 
-推送成功后把镜像 tag 写入 VOS 发布表。凭据来自 `~/.feishu.json`，或用 `FEISHU_CONFIG_FILE` 指定文件。字段为 `feishu_app_id`、`feishu_app_secret`、`feishu_spreadsheet_token`。
+`--no-push` 只构建和验证本机镜像。`--no-feishu` 跳过写表，供单独维护镜像使用。可通过 `APK_MIRROR`、`NPM_REGISTRY`、`GITHUB_PROXY` 调整构建源。
 
-- amd 镜像写入 `AMD_with_cuda`。
-- arm 镜像写入 `ARM_without_cuda`。
-- 列名为 `garm`，列不存在时自动创建并补写第 1、2 行。
-- 单元格内容形如 `amd_v0.2.1_20261110.1.e8478193`。
-- 写表失败时命令直接退出，不继续。
-
-构建慢时可以换源：
-
-```bash
-APK_MIRROR=https://mirrors.aliyun.com/alpine \
-NPM_REGISTRY=https://registry.npmmirror.com \
-./ictrek.app/scripts/release.sh --no-push --no-feishu
-```
-
-`GITHUB_PROXY` 只影响构建期查询 release 与克隆 provider 仓库，默认 `https://gh-proxy.com`。国内直连 `github.com` 常超时，单次克隆会等上百秒。需要直连时显式传空值：
-
-```bash
-GITHUB_PROXY= ./ictrek.app/scripts/release.sh
-```
-
-provider 克隆用 `--depth 1`，失败自动重试 3 次。
-
-Docker Hub 由宿主机 `registry-mirrors` 加速，脚本不处理。
-
-CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校验镜像与 SHA、生成包、建公开 tag `v<版本>` 并发布 Release、推送 VOS App Store。
+两种架构的镜像推送并记表后，在本地运行 `./ictrek.app/scripts/release.sh <版本>`。脚本核对本地提交与飞书记录后推送 `vos-garm-v<版本>`。CI 按发布表中的实际镜像引用打包，生成 GitHub Release，并发布到 VOS App Store。VOS 安装时选择与设备匹配的 `amd` 或 `arm` profile。
 
 ## 约束
 
-- 发布前工作区必须干净。`Dockerfile` 用 `git checkout ${GARM_REF}` 取镜像内容。
+- 发布前本地工作区必须干净。VOS 镜像使用同步到构建机的源码。
 - 不得删除已发布的 tag。序号由 tag 反推。
 - 不提交 `dist/`。

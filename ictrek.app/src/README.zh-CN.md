@@ -2,6 +2,10 @@
 
 自托管 GitHub Actions 与 Gitea Actions 运行器管理器。
 
+## 安装
+
+在 VOS 应用商店安装 GARM，按设备架构选 AMD64 或 ARM64 profile。创建 Runner 前请确认宿主已初始化 LXD。VOS 菜单提供中文入口，GARM 管理页面使用英文。
+
 ## 访问
 
 - 页面：`/app/com.ictrek.garm/ui/`
@@ -11,7 +15,7 @@
 
 - 前端通过 `window.vos_platform.api.v1000.oauth2` 走 PKCE 授权码流程，取得 VOS 访问令牌。
 - 后端用 `POST /api/v1/auth/vos` 换取 GARM 令牌。
-- 令牌校验地址默认是 `http://172.17.0.1:8105/v1000/oauth2/userinfo`，可用 `GARM_VOS_USERINFO_URL` 覆盖。
+- VOS 安装包从平台网关配置生成令牌校验地址。独立部署可用 `GARM_VOS_USERINFO_URL` 指定。
 - 第一个登录的 VOS 用户自动成为 GARM 管理员。
 - 不通过 VOS 访问时，仍然可以使用本地账号登录。
 
