@@ -15,7 +15,9 @@ GARM 的 VOS 交付定义。
 | `scripts/build_image.sh` | 构建并推送单架构镜像 |
 | `scripts/package.sh` | 生成 pull 安装包 |
 | `scripts/feishu_sheet.py` | 把镜像 tag 写入 VOS 发布表 |
-| `scripts/release.sh` | 本地发布入口 |
+| `scripts/release.sh` | 构建并推送本机架构镜像 |
+| `scripts/update_version.sh` | 出包、打 tag、推送发布 |
+| `image-tags` | 两种架构的推送 tag 记录，随代码提交 |
 | `dist/` | 构建产物，不提交 |
 
 ## 版本号
@@ -40,16 +42,29 @@ swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm:arm_v0.2.1_20261110.5.f827f4df
 
 - 一台构建机只构建一种架构：amd64 在 x86_64 主机，arm64 在 arm64 主机。架构与本机不一致时 `build_image.sh` 直接退出。
 - 本地构建（`--no-push`）的 tag 不带仓库前缀，由 `scripts/image-ref.sh` 生成，格式为 `garm:<arch>_v<版本>`。
-- 两种架构都推送完成后才 `git push` 发布 tag。安装包按版本直接算出两个 tag，不读飞书。
+- 推送后 `build_image.sh` 把本机架构的 tag 写入 `ictrek.app/image-tags`。安装包只读该文件，不读飞书。
+- 两台机器的版本必须相同。`update_version.sh` 检查 `image-tags` 的两行；版本不同时直接退出。
 
 ## 发布
 
+改了 garm 代码：
+
 ```bash
-./ictrek.app/scripts/release.sh              # 出镜像、出包、建本地 tag
-git push origin main vos-garm-v<版本>         # 公开，触发 CI
+./ictrek.app/scripts/release.sh   # 本机架构构建并推送，写飞书、写 image-tags
+# 在另一台架构的机器上再运行一次
+git add ictrek.app/image-tags      # 与代码一起提交
+git commit
+./ictrek.app/scripts/update_version.sh   # 出包、打 tag、推送
 ```
 
-`--no-push` 只构建本机架构的本地镜像，不推送仓库。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 只出包，不建 tag。`--arch amd|arm` 指定架构，默认取本机架构。
+只改 `ictrek.app/`：
+
+```bash
+git commit
+./ictrek.app/scripts/update_version.sh   # 出包、打 tag、推送，不构建镜像
+```
+
+`release.sh --no-push` 只构建本机架构的本地镜像。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 按现有 `image-tags` 出包，不建镜像。`update_version.sh --no-push` 只出包和本地 tag，不推送。
 
 推送成功后把镜像 tag 写入 VOS 发布表。凭据来自 `~/.feishu.json`，或用 `FEISHU_CONFIG_FILE` 指定文件。字段为 `feishu_app_id`、`feishu_app_secret`、`feishu_spreadsheet_token`。
 
@@ -84,3 +99,5 @@ CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校�
 - 发布前工作区必须干净。`Dockerfile` 用 `git checkout ${GARM_REF}` 取镜像内容。
 - 不得删除已发布的 tag。序号由 tag 反推。
 - 不提交 `dist/`。
+- `ictrek.app/image-tags` 必须提交。CI 用它生成安装包。
+- 改了 garm 代码必须重建两种架构镜像；只改 `ictrek.app/` 时不重建。

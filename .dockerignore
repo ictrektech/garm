@@ -8,6 +8,10 @@ webapp/build/
 .vscode/
 .idea/
 
+# Git runtime locks; a stale one breaks the checkout inside the image
+.git/*.lock
+.git/refs/**/*.lock
+
 # Build artifacts
 bin/
 dist/

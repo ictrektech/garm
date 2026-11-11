@@ -36,7 +36,8 @@ RUN echo ${GARM_REF}
 
 ADD . /build/garm
 
-RUN git -C /build/garm checkout ${GARM_REF}
+# 上下文是快照，残留的 git 锁文件直接删除，否则 checkout 会失败。
+RUN rm -f /build/garm/.git/index.lock && git -C /build/garm checkout ${GARM_REF}
 
 # Copy webapp build output to assets directory (after git checkout to override any checked-in assets)
 COPY --from=webapp /build/webapp/build/ /build/garm/webapp/assets/

@@ -2,6 +2,7 @@
 # 生成 pull 模式 VOS 安装包：dist/garm_<version>_pull.tar，外层只含 app.tar.gz。
 #
 # 用法：package.sh [--version <version>]
+# 镜像 tag 从 ictrek.app/image-tags 读取，由 build_image.sh 写入。
 # 环境：
 #   PACKAGE_VERSION  版本覆盖，CI 从 tag 名传入
 #   IMAGE_REPO       镜像仓库前缀，默认 swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm
@@ -30,20 +31,34 @@ done
 
 if [[ -n "${PACKAGE_VERSION}" ]]; then
   version="${PACKAGE_VERSION}"
-  [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8})\.([0-9]+)\.([0-9A-Za-z]+)$ ]] \
+  [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]{8}\.[0-9]+\.[0-9A-Za-z]+$ ]] \
     || die "invalid version: ${version}"
-  date="${BASH_REMATCH[1]}"
-  sha="${BASH_REMATCH[3]}"
 else
   eval "$("${ROOT_DIR}/scripts/version.sh")"
   version="${VERSION}"
-  date="${DATE}"
-  sha="${SHA}"
 fi
 
-tag_suffix="v${version//-/_}"
-amd_ref="${IMAGE_REF_AMD:-${IMAGE_REPO}:amd_${tag_suffix}}"
-arm_ref="${IMAGE_REF_ARM:-${IMAGE_REPO}:arm_${tag_suffix}}"
+# 镜像引用来自 build_image.sh 记录的文件，与飞书值相同。只改 ictrek.app/ 时复用。
+IMAGE_TAGS_FILE="${ROOT_DIR}/image-tags"
+
+read_image_tag() {
+  local key="$1" value
+  [[ -f "${IMAGE_TAGS_FILE}" ]] || return 0
+  value="$(sed -n "s/^${key}=//p" "${IMAGE_TAGS_FILE}" | head -n 1)"
+  printf '%s' "${value}"
+}
+
+image_ref_for() {
+  local arch="$1" tag
+  tag="$(read_image_tag "${arch}")"
+  [[ -n "${tag}" ]] || die "no ${arch} tag in ictrek.app/image-tags; run build_image.sh on the ${arch} host first"
+  [[ "${tag}" =~ ^${arch}_v[0-9]+\.[0-9]+\.[0-9]+_[0-9]{8}\.[0-9]+\.[0-9A-Za-z]+$ ]] \
+    || die "invalid ${arch} tag in ictrek.app/image-tags: ${tag}"
+  printf '%s:%s' "${IMAGE_REPO}" "${tag}"
+}
+
+amd_ref="${IMAGE_REF_AMD:-$(image_ref_for amd)}"
+arm_ref="${IMAGE_REF_ARM:-$(image_ref_for arm)}"
 
 for d in "${STAGE_DIR}" "${PACKAGE_ROOT}"; do
   [[ -d "${d}" ]] && find "${d}" -mindepth 1 -delete

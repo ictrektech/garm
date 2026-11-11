@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# 本地发布：算版本、出镜像、出包、建 tag、写飞书发布表，然后打印推送命令。
-# 不推送 git，推送由人执行。推 tag 会触发 .github/workflows/vos-release.yml。
+# 改了 garm 代码时的第一步：构建并推送本机架构的镜像，写飞书发布表。
+# 之后提交 ictrek.app/image-tags 与代码，再运行 update_version.sh 打 tag 并推送。
+# 只改 ictrek.app/ 时不运行本脚本，直接运行 update_version.sh。
 #
 # 用法：release.sh [--no-push] [--no-feishu] [--dry-run]
-#   --no-push    只构建本机架构的本地镜像，不推送仓库；包仍引用两种架构的推送 tag
+#   --no-push    只构建本机架构的本地镜像，不推送仓库
 #   --no-feishu  跳过写入飞书发布表
-#   --dry-run    只出包，跳过镜像与 tag，用于预览
+#   --dry-run    只按现有 ictrek.app/image-tags 出包，不建镜像
 # 环境：
 #   FEISHU_CONFIG_FILE  飞书凭据文件，默认 ~/.feishu.json
 set -euo pipefail
@@ -31,71 +32,31 @@ done
 
 cd "${repo_root}"
 
+if (( dry_run )); then
+  "${script_dir}/package.sh"
+  echo "release.sh: dry run, image build skipped"
+  exit 0
+fi
+
 # vendor/ 与 webapp/node_modules 不参与检查：前者由 go mod vendor 生成，
 # 后者被 .gitignore 忽略，二者在 NFS 上会显著拖慢工作区扫描。
 git diff --cached --quiet || die "worktree has staged changes"
 git diff --quiet -- . ':(exclude)vendor' ':(exclude)webapp/node_modules' \
   || die "worktree has unstaged changes (vendor and node_modules excluded)"
 
-# 让本地看到远端 tag，便于同名检查。不得用带 --force 的通配 refspec，
-# 远端无匹配 tag 时 git 会删除本地同名 tag。
-git fetch --tags origin >/dev/null 2>&1 || die "cannot fetch tags from origin"
-
-version_out="$("${script_dir}/version.sh")" || die "cannot compute version, see the error above"
-eval "${version_out}"
-tag="vos-garm-v${VERSION}"
-image_repo="${IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm}"
-branch="$(git branch --show-current)"
-
-# 同一提交可能被多个架构各构建一次。tag 与架构无关，已存在且指向 HEAD 时复用，
-# 指向其他提交时才视为冲突。
-tag_exists=0
-if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-  tag_sha="$(git rev-list -n1 "refs/tags/${tag}")"
-  head_sha="$(git rev-parse HEAD)"
-  if [[ "${tag_sha}" != "${head_sha}" ]]; then
-    die "tag already exists: ${tag} (points to ${tag_sha:0:8}, HEAD is ${head_sha:0:8}); delete it or use a new build date"
-  fi
-  tag_exists=1
-  echo "release.sh: tag ${tag} already exists for this commit, reusing it"
-fi
-
-build_args=(--version "${VERSION}")
+build_args=()
 if (( no_feishu )); then
   build_args+=(--no-feishu)
 fi
 
-if (( dry_run )); then
-  echo "release.sh: dry run, skipping image build and tag"
-elif (( no_push )); then
+if (( no_push )); then
   "${script_dir}/build_image.sh" --no-push "${build_args[@]}"
-  local_image="$("${script_dir}/image-ref.sh" --version "${VERSION}")"
 else
   "${script_dir}/build_image.sh" "${build_args[@]}"
 fi
 
-"${script_dir}/package.sh" --version "${VERSION}"
-tag_suffix="v${VERSION//-/_}"
-amd_image="${IMAGE_REF_AMD:-${image_repo}:amd_${tag_suffix}}"
-arm_image="${IMAGE_REF_ARM:-${image_repo}:arm_${tag_suffix}}"
-
-if (( dry_run )); then
-  echo "release.sh: version ${VERSION} (dry run, no tag created)"
-  exit 0
-fi
-
-if (( tag_exists )); then
-  echo "release.sh: tag ${tag} already created, skipping"
-else
-  git tag -a "${tag}" -m "VOS garm ${VERSION}"
-fi
-
 echo
-echo "release.sh: version ${VERSION}"
-echo "release.sh: image   ${amd_image}"
-echo "release.sh: image   ${arm_image}"
-[[ -z "${local_image:-}" ]] || echo "release.sh: local   ${local_image}"
-echo "release.sh: tag     ${tag} (local only)"
-echo
-echo "Push to publish:"
-echo "  git push origin ${branch} ${tag}"
+echo "release.sh: 下一步"
+echo "  1. 提交 ictrek.app/image-tags 和代码改动"
+echo "  2. 在另一种架构的机器上运行本脚本，或使用已推送的 tag"
+echo "  3. ./ictrek.app/scripts/update_version.sh"

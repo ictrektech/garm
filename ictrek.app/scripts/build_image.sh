@@ -33,6 +33,20 @@ no_feishu=0
 
 die() { echo "build_image.sh: $*" >&2; exit 1; }
 
+# 把本机架构的 tag 写入 ictrek.app/image-tags，安装包从该文件取镜像引用。
+record_image_tag() {
+  local key="$1" value="$2"
+  local file="${app_dir}/image-tags" tmp
+  tmp="$(mktemp)"
+  if [[ -f "${file}" ]]; then
+    grep -v "^${key}=" "${file}" > "${tmp}" || true
+  fi
+  printf '%s=%s\n' "${key}" "${value}" >> "${tmp}"
+  LC_ALL=C sort "${tmp}" > "${file}"
+  rm -f "${tmp}"
+  echo "build_image.sh: recorded ${key}=${value} in ictrek.app/image-tags"
+}
+
 host_arch() {
   case "$(uname -m)" in
     x86_64|amd64) echo "amd" ;;
@@ -129,8 +143,12 @@ docker push "${image}"
 docker manifest inspect "${image}" >/dev/null
 echo "build_image.sh: pushed ${image}"
 
+# 记录本机架构的 tag。安装包从这里取引用，只改 ictrek.app/ 时不用重建镜像。
+record_image_tag "${arch}" "${tag}"
+
 if (( no_feishu )); then
   echo "build_image.sh: Feishu sheet update skipped (--no-feishu)"
+  echo "build_image.sh: commit ictrek.app/image-tags before publishing"
   exit 0
 fi
 
@@ -147,3 +165,5 @@ python3 "${script_dir}/feishu_sheet.py" \
   --value "${tag}" \
   --date "${date_part}" \
   || die "cannot record ${tag} in sheet ${sheet}"
+
+echo "build_image.sh: commit ictrek.app/image-tags before publishing"
