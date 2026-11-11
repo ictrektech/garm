@@ -3,10 +3,10 @@
 # 只改 ictrek.app/ 时用本脚本；改了 garm 代码时先在两台构建机跑 build_image.sh。
 #
 # 用法：update_version.sh [--no-push]
-#   --no-push   只出包和本地 tag，不推送远端
+#   --no-push   只出包、提交和本地 tag，不推送远端
 # 前置条件：
-#   - 工作区干净。
 #   - ictrek.app/image-tags 存在 amd 与 arm 两行，且两行版本一致。
+#   - 工作区除 ictrek.app/image-tags 外干净。该文件由本脚本自动提交。
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,13 +27,27 @@ done
 
 cd "${repo_root}"
 
-git diff --cached --quiet || die "worktree has staged changes"
-git diff --quiet -- . ':(exclude)vendor' ':(exclude)webapp/node_modules' \
-  || die "worktree has unstaged changes (vendor and node_modules excluded)"
-
 tags_file="${app_dir}/image-tags"
+tags_path="ictrek.app/image-tags"
 [[ -f "${tags_file}" ]] \
-  || die "missing ictrek.app/image-tags; run build_image.sh on both hosts first"
+  || die "missing ${tags_path}; run build_image.sh on both hosts first"
+
+# image-tags 由本脚本提交。除此之外的工作区改动一律拒绝。
+changed_paths="$({
+  git diff --name-only
+  git diff --cached --name-only
+  git ls-files --others --exclude-standard
+} | sort -u)"
+unexpected=""
+while IFS= read -r path; do
+  [[ -z "${path}" ]] && continue
+  case "${path}" in
+    "${tags_path}"|vendor/*|webapp/node_modules/*) continue ;;
+  esac
+  unexpected="${unexpected} ${path}"
+done <<< "${changed_paths}"
+[[ -z "${unexpected}" ]] \
+  || die "worktree has changes outside ${tags_path}:${unexpected}"
 
 amd_tag="$(sed -n 's/^amd=//p' "${tags_file}" | head -n 1)"
 arm_tag="$(sed -n 's/^arm=//p' "${tags_file}" | head -n 1)"
@@ -58,6 +72,14 @@ if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; t
 fi
 
 "${script_dir}/package.sh" --version "${VERSION}"
+
+# 提交 image-tags，让发布 tag 指向包含它的提交。只改 ictrek.app/ 的提交不改变版本里的 SHA。
+if [[ -n "$(git status --porcelain -- "${tags_path}")" ]]; then
+  git add -- "${tags_path}"
+  git commit -m "chore: release VOS garm ${VERSION}" \
+    || die "cannot commit ${tags_path}; check git user.name and user.email"
+  echo "update_version.sh: committed ${tags_path}"
+fi
 
 git tag -a "${tag}" -m "VOS garm ${VERSION}"
 

@@ -64,5 +64,5 @@ fi
 
 echo "release.sh: next steps"
 echo "  1. run this script on the other architecture host from the same commit"
-echo "  2. commit ictrek.app/image-tags and your code changes"
+echo "  2. commit any code changes; update_version.sh commits ictrek.app/image-tags"
 echo "  3. ./ictrek.app/scripts/update_version.sh"

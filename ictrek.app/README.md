@@ -53,9 +53,8 @@ swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm:arm_v0.2.1_20261110.5.f827f4df
 ```bash
 ./ictrek.app/scripts/release.sh   # 本机架构构建并推送，写飞书、写 image-tags
 # 在另一台架构的机器上再运行一次
-git add ictrek.app/image-tags      # 与代码一起提交
-git commit
-./ictrek.app/scripts/update_version.sh   # 出包、打 tag、推送
+# 代码改动先提交；image-tags 由 update_version.sh 提交
+./ictrek.app/scripts/update_version.sh   # 提交 image-tags、出包、打 tag、推送
 ```
 
 只改 `ictrek.app/`：
