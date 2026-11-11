@@ -796,6 +796,17 @@ func (r *Runner) validateHookBody(signature, secret string, body []byte) error {
 	return nil
 }
 
+// sameURLHost reports whether rawURL points at scheme://host. Forge webhooks
+// report the site root in job URLs, while an endpoint may be mounted on a
+// sub-path, so only the scheme and host are compared.
+func sameURLHost(rawURL, schemeHost string) bool {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Scheme+"://"+u.Host, schemeHost)
+}
+
 func (r *Runner) findEndpointForJob(job params.WorkflowJob, forgeType params.EndpointType) (params.ForgeEndpoint, error) {
 	uri, err := url.ParseRequestURI(job.WorkflowJob.HTMLURL)
 	if err != nil {
@@ -823,8 +834,7 @@ func (r *Runner) findEndpointForJob(job params.WorkflowJob, forgeType params.End
 	}
 	for _, ep := range endpoints {
 		slog.DebugContext(r.ctx, "checking endpoint", "base_uri", baseURI, "endpoint", ep.BaseURL)
-		epBaseURI := strings.TrimSuffix(ep.BaseURL, "/")
-		if epBaseURI == baseURI {
+		if sameURLHost(ep.BaseURL, baseURI) || sameURLHost(ep.APIBaseURL, baseURI) {
 			return ep, nil
 		}
 	}

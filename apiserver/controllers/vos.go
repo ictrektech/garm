@@ -65,8 +65,8 @@ func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if user.IsAdmin {
-		if origin := vosBrowserOrigin(r); origin != "" {
-			a.configureVOSIntegration(ctx, origin)
+		if vosBrowserOrigin(r) != "" {
+			a.configureVOSIntegration(ctx)
 		}
 	}
 
@@ -86,6 +86,20 @@ func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) 
 
 const vosLocalGitea = "http://gitea:8080"
 const vosGiteaPath = "/app/com.ictrek.gitea/"
+const vosAppPath = "/app/com.ictrek.garm"
+
+// vosInternalBase is the plain HTTP gateway that other services on this device
+// (Gitea webhooks, LXD runner instances) use to reach GARM. It must not be the
+// browser facing TLS origin: runner instances cannot verify the platform
+// certificate, and the public URL is often an external tunnel.
+const vosInternalBase = "http://172.17.0.1:1182"
+
+func vosInternalBaseURL() string {
+	if base := strings.TrimSpace(os.Getenv("GARM_VOS_INTERNAL_BASE")); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	return vosInternalBase
+}
 
 var vosIntegrationMu sync.Mutex
 
@@ -117,13 +131,13 @@ func vosGiteaAvailable(ctx context.Context, base string) bool {
 	return err == nil && resp.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "OK"
 }
 
-func (a *APIController) configureVOSIntegration(ctx context.Context, origin string) {
+func (a *APIController) configureVOSIntegration(ctx context.Context) {
 	vosIntegrationMu.Lock()
 	defer vosIntegrationMu.Unlock()
 
 	info, err := a.r.GetControllerInfo(ctx)
 	if err == nil {
-		base := origin + "/app/com.ictrek.garm"
+		base := vosInternalBaseURL() + vosAppPath
 		missing := func(current, path string) *string {
 			if current != "" {
 				return nil
@@ -148,10 +162,12 @@ func (a *APIController) configureVOSIntegration(ctx context.Context, origin stri
 	if err != nil {
 		return
 	}
-	publicURL, internalURL := origin+vosGiteaPath, vosLocalGitea+vosGiteaPath
+	// Gitea is reached over the same internal gateway, both by GARM and by the
+	// runner instances. vosLocalGitea is only used for the reachability probe.
+	giteaURL := vosInternalBaseURL() + vosGiteaPath
 	for _, endpoint := range endpoints {
-		if endpoint.Name == "vos-gitea" || strings.TrimRight(endpoint.BaseURL, "/") == strings.TrimRight(publicURL, "/") ||
-			strings.TrimRight(endpoint.APIBaseURL, "/") == strings.TrimRight(internalURL, "/") {
+		if endpoint.Name == "vos-gitea" || strings.TrimRight(endpoint.BaseURL, "/") == strings.TrimRight(giteaURL, "/") ||
+			strings.TrimRight(endpoint.APIBaseURL, "/") == strings.TrimRight(giteaURL, "/") {
 			return
 		}
 	}
@@ -160,7 +176,7 @@ func (a *APIController) configureVOSIntegration(ctx context.Context, origin stri
 	}
 	_, err = a.r.CreateGiteaEndpoint(ctx, runnerParams.CreateGiteaEndpointParams{
 		Name: "vos-gitea", Description: "Gitea on this VOS device",
-		BaseURL: publicURL, APIBaseURL: internalURL,
+		BaseURL: giteaURL, APIBaseURL: giteaURL,
 	})
 	if err != nil {
 		slog.WarnContext(ctx, "Unable to add the local VOS Gitea endpoint", "error", err)
