@@ -15,6 +15,9 @@ profiles:
     title:
       zh-CN: AMD64（x86-64）
       en: AMD64 (x86-64)
+    description:
+      zh-CN: 适用于 AMD64（x86-64）设备，无需 GPU。
+      en: For AMD64 (x86-64) devices. No GPU required.
     caps:
       arch: amd64
     conflicts: [arm]
@@ -22,6 +25,9 @@ profiles:
     title:
       zh-CN: ARM64（64 位 ARM）
       en: ARM64 (64-bit ARM)
+    description:
+      zh-CN: 适用于 ARM64（64 位 ARM）设备，无需 GPU。
+      en: For ARM64 (64-bit ARM) devices. No GPU required.
     caps:
       arch: arm64
     conflicts: [amd]
