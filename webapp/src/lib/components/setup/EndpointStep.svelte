@@ -26,6 +26,7 @@
 	let formData = {
 		name: '',
 		description: '',
+		endpoint_type: '',
 		base_url: '',
 		api_base_url: '',
 		upload_base_url: '',

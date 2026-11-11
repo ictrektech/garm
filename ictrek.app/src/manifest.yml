@@ -14,6 +14,23 @@ icon: icon.png
 platform:
   version: ">=3.0.0"
 
+# VOS single sign-on. The UI is rendered inside the VOS shell, which exposes
+# window.vos_platform.api.v1000.oauth2 to run the PKCE flow. The resulting
+# access token is exchanged for a GARM JWT on /api/v1/auth/vos.
+oauth2:
+  client:
+    id: com.ictrek.garm
+    client_type: public
+    redirect_uris:
+      - https://app.vos-platform.internal/callback
+    grant_types: [authorization_code, refresh_token]
+    response_types: [code]
+    scopes: [openid, profile, email]
+    pkce_required: true
+    token_endpoint_auth_method: none
+    access_token_ttl: 3600
+    refresh_token_ttl: 1209600
+
 storage:
   directories:
     - path: garm

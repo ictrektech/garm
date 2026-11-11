@@ -5,7 +5,15 @@
 ## 访问
 
 - 页面：`/app/com.ictrek.garm/ui/`
-- 首次打开页面时创建管理员账号。
+- 在 VOS 中打开时使用 VOS 单点登录，不需要手动输入账号密码。
+
+## 登录
+
+- 前端通过 `window.vos_platform.api.v1000.oauth2` 走 PKCE 授权码流程，取得 VOS 访问令牌。
+- 后端用 `POST /api/v1/auth/vos` 换取 GARM 令牌。
+- 令牌校验地址默认是 `http://172.17.0.1:8105/v1000/oauth2/userinfo`，可用 `GARM_VOS_USERINFO_URL` 覆盖。
+- 第一个登录的 VOS 用户自动成为 GARM 管理员。
+- 不通过 VOS 访问时，仍然可以使用本地账号登录。
 
 ## 配置
 

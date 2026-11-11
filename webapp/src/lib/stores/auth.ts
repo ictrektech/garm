@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { garmApi } from '../api/client.js';
 import { APP_BASE_PATH } from '../base-path';
+import { tryVOSLogin } from '../vos-sso';
 
 // Check if we're in development mode (cross-origin setup)
 const isDevelopmentMode = () => {
@@ -87,6 +88,26 @@ export const auth = {
 		}
 	},
 
+	// Sign in through the VOS OIDC bridge. Returns false outside VOS or when
+	// GARM rejects the VOS access token.
+	async loginWithVOS(): Promise<boolean> {
+		const token = await tryVOSLogin();
+		if (!token) return false;
+
+		if (browser) {
+			setCookie('garm_token', token);
+			setCookie('garm_user', 'vos');
+		}
+		garmApi.setToken(token);
+		authStore.set({
+			isAuthenticated: true,
+			user: 'vos',
+			loading: false,
+			needsInitialization: false
+		});
+		return true;
+	},
+
 	logout(): void {
 		if (browser) {
 			deleteCookie('garm_token');
@@ -102,47 +123,43 @@ export const auth = {
 	},
 
 	async init(): Promise<void> {
-		if (browser) {
-			try {
-				authStore.update(state => ({ ...state, loading: true }));
-				
-				// First, always check initialization status by doing GET /api/v1/login
-				await auth.checkInitializationStatus();
-				
-				// If we get here without needsInitialization being set, check for existing auth
-				const token = getCookie('garm_token');
-				const user = getCookie('garm_user');
-				
-				if (token && user) {
-					// Set the token in the API client for future requests
-					garmApi.setToken(token);
-					
-					// Verify token is still valid
-					const isValid = await auth.checkAuth();
-					if (isValid) {
-						// Token is valid, set authenticated state
-						authStore.set({
-							isAuthenticated: true,
-							user,
-							loading: false,
-							needsInitialization: false
-						});
-						return;
-					}
-				}
-				
-				// No valid token, user needs to login (but GARM is initialized)
-				authStore.update(state => ({ 
-					...state, 
+		if (!browser) {
+			authStore.update(state => ({ ...state, loading: false }));
+			return;
+		}
+
+		authStore.update(state => ({ ...state, loading: true }));
+
+		// 1. Reuse an existing session cookie.
+		const token = getCookie('garm_token');
+		const user = getCookie('garm_user');
+		if (token && user) {
+			garmApi.setToken(token);
+			if (await auth.checkAuth()) {
+				authStore.set({
+					isAuthenticated: true,
+					user,
 					loading: false,
 					needsInitialization: false
-				}));
-				
-			} catch (error) {
-				// If checkInitializationStatus threw an error, it should have set needsInitialization
-				authStore.update(state => ({ ...state, loading: false }));
+				});
+				return;
 			}
-		} else {
+		}
+
+		// 2. Try VOS single sign-on before showing the login form.
+		if (await auth.loginWithVOS()) {
+			return;
+		}
+
+		// 3. Fall back to local authentication.
+		try {
+			await auth.checkInitializationStatus();
+			authStore.update(state => ({
+				...state,
+				loading: false,
+				needsInitialization: false
+			}));
+		} catch (error) {
 			authStore.update(state => ({ ...state, loading: false }));
 		}
 	},

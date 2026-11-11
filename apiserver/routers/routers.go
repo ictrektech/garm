@@ -199,6 +199,9 @@ func NewAPIRouter(han *controllers.APIController, authMiddleware, initMiddleware
 	// install script
 	metadataRouter.Handle("/install-script/", http.HandlerFunc(han.RunnerInstallScriptHandler)).Methods("GET", "OPTIONS")
 	metadataRouter.Handle("/install-script", http.HandlerFunc(han.RunnerInstallScriptHandler)).Methods("GET", "OPTIONS")
+	// VOS SSO login. Registered before the /auth prefix so that it is not
+	// guarded by initMiddleware: the first VOS user bootstraps the admin user.
+	apiSubRouter.Handle("/auth/vos", http.HandlerFunc(han.VOSLoginHandler)).Methods("POST", "OPTIONS")
 	// Login
 	authRouter := apiSubRouter.PathPrefix("/auth").Subrouter()
 	authRouter.Handle("/{login:login\\/?}", http.HandlerFunc(han.LoginHandler)).Methods("POST", "OPTIONS")

@@ -5,7 +5,15 @@ Self-hosted runner manager for GitHub Actions and Gitea Actions.
 ## Access
 
 - UI: `/app/com.ictrek.garm/ui/`
-- Create the administrator account on the first page load.
+- Opened inside VOS, the UI uses VOS single sign-on. No manual credentials are needed.
+
+## Login
+
+- The UI runs the OIDC PKCE flow through `window.vos_platform.api.v1000.oauth2`.
+- The backend exchanges the VOS access token on `POST /api/v1/auth/vos`.
+- The userinfo endpoint defaults to `http://172.17.0.1:8105/v1000/oauth2/userinfo` and can be overridden with `GARM_VOS_USERINFO_URL`.
+- The first VOS user becomes the GARM administrator.
+- Local accounts still work when the UI is opened outside VOS.
 
 ## Configuration
 
