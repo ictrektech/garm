@@ -41,12 +41,14 @@ RUN git -C /build/garm checkout ${GARM_REF}
 # Copy webapp build output to assets directory (after git checkout to override any checked-in assets)
 COPY --from=webapp /build/webapp/build/ /build/garm/webapp/assets/
 
-RUN cd /build/garm \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd /build/garm \
     && go build -o /bin/garm \
       -tags osusergo,netgo,sqlite_omit_load_extension \
       -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=$(git describe --tags --match='v[0-9]*' --dirty --always)" \
       /build/garm/cmd/garm && upx /bin/garm
-RUN cd /build/garm/cmd/garm-cli \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd /build/garm/cmd/garm-cli \
     && go build -o /bin/garm-cli \
       -tags osusergo,netgo,sqlite_omit_load_extension \
       -ldflags "-linkmode external -extldflags '-static' -s -w -X github.com/cloudbase/garm/util/appdefaults.Version=$(git describe --tags --match='v[0-9]*' --dirty --always)" \
@@ -55,7 +57,9 @@ RUN cd /build/garm/cmd/garm-cli \
 # runners are also managed on other platforms.
 # 非 main 的 GARM_REF 会查询各仓库的 latest release。GitHub API 未认证时限流，
 # 查询失败时退回 main 分支，避免用 --branch null 克隆后必然失败。
-RUN set -ex; \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    set -ex; \
     mkdir -p /opt/garm/providers.d; \
     GITHUB_URL="https://github.com"; \
     API_URL="https://api.github.com"; \
