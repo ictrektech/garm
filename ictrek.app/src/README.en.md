@@ -23,6 +23,10 @@ VOS installations use VOS sign-in exclusively. After upgrading, sessions for old
 
 HTTP 400 indicates invalid JSON or a missing token. HTTP 401 indicates an invalid token, an unavailable account or disabled VOS authentication. HTTP 409 indicates the username is already bound to a different VOS user. Other storage failures return HTTP 500. For a 401, reopen the app from VOS. For a 409, ask the administrator to check the conflicting account binding.
 
+## Local Gitea discovery
+
+When a VOS system administrator opens GARM, it fills missing controller URLs from the current VOS gateway. If Gitea is available on the same device, Endpoints shows `vos-gitea`. Existing URLs and endpoints are preserved. When local Gitea is absent, GARM remains usable and a remote Gitea endpoint can be added manually. Discovery configures addresses. Set credentials for the target repository separately. VOS sign-in triggers discovery without changing the sign-in request, response or success status.
+
 ## Configuration
 
 - `GARM_LOG_LEVEL`: log level, defaults to `info`.
