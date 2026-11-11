@@ -14,6 +14,31 @@ icon: icon.png
 platform:
   version: ">=3.0.0"
 
+# 镜像 tag 带架构前缀，安装时按宿主架构选择对应的 profile。
+profiles:
+  - name: amd
+    title:
+      zh-CN: AMD64
+      en: AMD64
+    description:
+      zh-CN: 使用 AMD64 镜像（飞书 AMD_with_cuda 表）。
+      en: Uses the AMD64 image (Feishu AMD_with_cuda sheet).
+    caps:
+      arch: amd64
+    conflicts: [arm]
+  - name: arm
+    title:
+      zh-CN: ARM64
+      en: ARM64
+    description:
+      zh-CN: 使用 ARM64 镜像（飞书 ARM_without_cuda 表）。
+      en: Uses the ARM64 image (Feishu ARM_without_cuda sheet).
+    caps:
+      arch: arm64
+    conflicts: [amd]
+
+require-profiles: true
+
 # VOS single sign-on. The UI is rendered inside the VOS shell, which exposes
 # window.vos_platform.api.v1000.oauth2 to run the PKCE flow. The resulting
 # access token is exchanged for a GARM JWT on /api/v1/auth/vos.

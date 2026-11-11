@@ -27,7 +27,6 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8})\.([0-9]+)\.([0-9a-zA-Z]+)$ ]] \
             || { echo "invalid version: $VERSION"; exit 1; }
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${BASH_REMATCH[1]}.${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
           echo "sha=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
 
       - name: Verify commit matches version

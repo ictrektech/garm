@@ -202,6 +202,11 @@ def main():
         write_cell(token, spreadsheet, sheet, "%s2" % letter, args.image)
         print("feishu_sheet.py: created column %s in %s" % (letter, args.sheet))
     write_cell(token, spreadsheet, sheet, "%s%d" % (letter, row), args.value)
+    # 回读断言：表里的值必须与推送 tag 逐字相同。
+    readback = read_values(token, spreadsheet, "%s!%s%d:%s%d" % (sheet, letter, row, letter, row))
+    actual = cell_text(readback[0][0]) if readback and readback[0] else ""
+    if actual != args.value:
+        die("readback mismatch in %s!%s%d: %r != %r" % (sheet, letter, row, actual, args.value))
     print("feishu_sheet.py: %s!%s%d = %s" % (args.sheet, letter, row, args.value))
 
 

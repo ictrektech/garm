@@ -52,7 +52,8 @@ fi
 n=$(( ${last:-0} + 1 ))
 
 version="${core}-${date}.${n}.${sha}"
-image_tag="${date}.${sha}"
+# 镜像 tag 的后缀，不含架构前缀；完整 tag 为 <arch>_<IMAGE_TAG>。
+image_tag="v${version//-/_}"
 
 echo "CORE=${core}"
 echo "DATE=${date}"

@@ -3,7 +3,7 @@
 # 不推送 git，推送由人执行。推 tag 会触发 .github/workflows/vos-release.yml。
 #
 # 用法：release.sh [--no-push] [--no-feishu] [--dry-run]
-#   --no-push    只构建本地镜像，不推送仓库；打出的包引用本地 tag
+#   --no-push    只构建本机架构的本地镜像，不推送仓库；包仍引用两种架构的推送 tag
 #   --no-feishu  跳过写入飞书发布表
 #   --dry-run    只出包，跳过镜像与 tag，用于预览
 # 环境：
@@ -69,13 +69,15 @@ if (( dry_run )); then
   echo "release.sh: dry run, skipping image build and tag"
 elif (( no_push )); then
   "${script_dir}/build_image.sh" --no-push "${build_args[@]}"
-  export IMAGE_REF="$("${script_dir}/image-ref.sh" --version "${VERSION}")"
+  local_image="$("${script_dir}/image-ref.sh" --version "${VERSION}")"
 else
   "${script_dir}/build_image.sh" "${build_args[@]}"
 fi
 
 "${script_dir}/package.sh" --version "${VERSION}"
-image="${IMAGE_REF:-${image_repo}:${IMAGE_TAG}}"
+tag_suffix="v${VERSION//-/_}"
+amd_image="${IMAGE_REF_AMD:-${image_repo}:amd_${tag_suffix}}"
+arm_image="${IMAGE_REF_ARM:-${image_repo}:arm_${tag_suffix}}"
 
 if (( dry_run )); then
   echo "release.sh: version ${VERSION} (dry run, no tag created)"
@@ -90,7 +92,9 @@ fi
 
 echo
 echo "release.sh: version ${VERSION}"
-echo "release.sh: image   ${image}"
+echo "release.sh: image   ${amd_image}"
+echo "release.sh: image   ${arm_image}"
+[[ -z "${local_image:-}" ]] || echo "release.sh: local   ${local_image}"
 echo "release.sh: tag     ${tag} (local only)"
 echo
 echo "Push to publish:"

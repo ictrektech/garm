@@ -1,34 +1,44 @@
+x-garm-service: &garm-service
+  entrypoint: ["/bin/sh", "/etc/garm/entrypoint.sh"]
+  restart: unless-stopped
+  networks:
+    - vos_default
+  environment:
+    GARM_LOG_LEVEL: ${GARM_LOG_LEVEL:-info}
+    GARM_LXD_INSTANCE_TYPE: ${GARM_LXD_INSTANCE_TYPE:-container}
+    GARM_LXD_PROJECT: ${GARM_LXD_PROJECT:-default}
+    GARM_LXD_SOCKET_PATH: ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
+    VOS_APP_STORAGE_PATH: ${VOS_APP_STORAGE_PATH}
+  volumes:
+    - ${VOS_APP_STORAGE_PATH}/garm:/data
+    - ./garm:/etc/garm:ro
+    # LXD unix socket, so the bundled garm-provider-lxd can talk to the host.
+    - ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}:${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
+  labels:
+    - "io.ictrek.version=__APP_VERSION__"
+    - "traefik.enable=true"
+    - "traefik.docker.network=vos_default"
+    - "traefik.http.routers.garm-web.rule=PathPrefix(`/app/com.ictrek.garm`)"
+    - "traefik.http.routers.garm-web.service=garm-web"
+    - "traefik.http.services.garm-web.loadbalancer.server.port=9997"
+  healthcheck:
+    test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9997/app/com.ictrek.garm/ui/ || exit 1"]
+    interval: 30s
+    timeout: 5s
+    start_period: 20s
+    retries: 3
+
+# 镜像 tag 带架构前缀，两种架构各用一个 service profile。
 services:
-  garm:
-    image: __IMAGE_REF__
-    entrypoint: ["/bin/sh", "/etc/garm/entrypoint.sh"]
-    restart: unless-stopped
-    networks:
-      - vos_default
-    environment:
-      GARM_LOG_LEVEL: ${GARM_LOG_LEVEL:-info}
-      GARM_LXD_INSTANCE_TYPE: ${GARM_LXD_INSTANCE_TYPE:-container}
-      GARM_LXD_PROJECT: ${GARM_LXD_PROJECT:-default}
-      GARM_LXD_SOCKET_PATH: ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
-      VOS_APP_STORAGE_PATH: ${VOS_APP_STORAGE_PATH}
-    volumes:
-      - ${VOS_APP_STORAGE_PATH}/garm:/data
-      - ./garm:/etc/garm:ro
-      # LXD unix socket, so the bundled garm-provider-lxd can talk to the host.
-      - ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}:${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
-    labels:
-      - "io.ictrek.version=__APP_VERSION__"
-      - "traefik.enable=true"
-      - "traefik.docker.network=vos_default"
-      - "traefik.http.routers.garm-web.rule=PathPrefix(`/app/com.ictrek.garm`)"
-      - "traefik.http.routers.garm-web.service=garm-web"
-      - "traefik.http.services.garm-web.loadbalancer.server.port=9997"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9997/app/com.ictrek.garm/ui/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      start_period: 20s
-      retries: 3
+  garm-amd:
+    <<: *garm-service
+    profiles: [amd]
+    image: ${GARM_AMD_IMAGE}
+
+  garm-arm:
+    <<: *garm-service
+    profiles: [arm]
+    image: ${GARM_ARM_IMAGE}
 
 networks:
   vos_default:

@@ -11,8 +11,8 @@ GARM 的 VOS 交付定义。
 | `src/garm/config.toml.tpl` | 运行配置模板，由入口脚本渲染 |
 | `scripts/version.sh` | 生成版本串与镜像 tag |
 | `scripts/git-sha.sh` | 生成合法 SemVer 的短 SHA |
-| `scripts/image-ref.sh` | 生成本地镜像引用，带架构前缀 |
-| `scripts/build_image.sh` | 多架构构建并推送镜像 |
+| `scripts/image-ref.sh` | 生成镜像引用，带架构前缀 |
+| `scripts/build_image.sh` | 构建并推送单架构镜像 |
 | `scripts/package.sh` | 生成 pull 安装包 |
 | `scripts/feishu_sheet.py` | 把镜像 tag 写入 VOS 发布表 |
 | `scripts/release.sh` | 本地发布入口 |
@@ -31,14 +31,16 @@ GARM 的 VOS 交付定义。
 - `<N>`：远端同名日期 tag 的最大序号加一。
 - `<GITSHA>`：8 位起，遇前导零加长。
 
-推送的镜像 tag 只取后两段，即 `20261109.158fe569`，多架构共用这一个 manifest list。
-
-本地构建（`--no-push`）的 tag 带架构前缀，格式为 `<arch>_v<版本>`，由 `scripts/image-ref.sh` 生成：
+推送的镜像 tag 带架构前缀，格式为 `<arch>_v<版本>`，与飞书发布表的值逐字相同：
 
 ```text
-garm:amd_v0.2.1_20261110.1.e8478193
-garm:arm_v0.2.1_20261110.1.e8478193
+swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm:amd_v0.2.1_20261110.5.f827f4df
+swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm:arm_v0.2.1_20261110.5.f827f4df
 ```
+
+- 一台构建机只构建一种架构：amd64 在 x86_64 主机，arm64 在 arm64 主机。架构与本机不一致时 `build_image.sh` 直接退出。
+- 本地构建（`--no-push`）的 tag 不带仓库前缀，由 `scripts/image-ref.sh` 生成，格式为 `garm:<arch>_v<版本>`。
+- 两种架构都推送完成后才 `git push` 发布 tag。安装包按版本直接算出两个 tag，不读飞书。
 
 ## 发布
 
@@ -47,7 +49,7 @@ garm:arm_v0.2.1_20261110.1.e8478193
 git push origin main vos-garm-v<版本>         # 公开，触发 CI
 ```
 
-`--no-push` 只构建本地镜像，不推送仓库。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 只出包，不建 tag。
+`--no-push` 只构建本机架构的本地镜像，不推送仓库。`--no-feishu` 跳过写入飞书发布表。`--dry-run` 只出包，不建 tag。`--arch amd|arm` 指定架构，默认取本机架构。
 
 推送成功后把镜像 tag 写入 VOS 发布表。凭据来自 `~/.feishu.json`，或用 `FEISHU_CONFIG_FILE` 指定文件。字段为 `feishu_app_id`、`feishu_app_secret`、`feishu_spreadsheet_token`。
 
@@ -75,7 +77,7 @@ provider 克隆用 `--depth 1`，失败自动重试 3 次。
 
 Docker Hub 由宿主机 `registry-mirrors` 加速，脚本不处理。
 
-CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校验镜像与 SHA、生成包、建公开 tag `v<版本>` 并发布 Release、推送 VOS App Store。
+CI 在 `.github/workflows/vos-release.yml`，由 `vos-garm-v*` tag 触发：校验 SHA、生成包、建公开 tag `v<版本>` 并发布 Release、推送 VOS App Store。CI 不构建镜像，发布前必须已推送 `amd_v<版本>` 与 `arm_v<版本>`。
 
 ## 约束
 
