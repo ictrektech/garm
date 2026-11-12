@@ -886,13 +886,14 @@ func (r *Runner) DispatchWorkflowJob(hookTargetType, signature string, forgeType
 		return runnerErrors.NewBadRequestError("cannot handle hook target type %s", hookTargetType)
 	}
 
-	slog.DebugContext(r.ctx, "found pool manager", "pool_manager", poolManager.ID())
 	if err != nil {
 		slog.ErrorContext(r.ctx, "failed to find pool manager", "error", err, "hook_target_type", hookTargetType)
 		// We don't have a repository or organization configured that
 		// can handle this workflow job.
 		return fmt.Errorf("error fetching poolManager: %w", err)
 	}
+
+	slog.DebugContext(r.ctx, "found pool manager", "pool_manager", poolManager.ID())
 
 	// We found a pool. Validate the webhook job. If a secret is configured,
 	// we make sure that the source of this workflow job is valid.
