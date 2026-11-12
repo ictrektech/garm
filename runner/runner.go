@@ -832,14 +832,31 @@ func (r *Runner) findEndpointForJob(job params.WorkflowJob, forgeType params.End
 	if err != nil {
 		return params.ForgeEndpoint{}, fmt.Errorf("error fetching github endpoints: %w", err)
 	}
-	for _, ep := range endpoints {
-		slog.DebugContext(r.ctx, "checking endpoint", "base_uri", baseURI, "endpoint", ep.BaseURL)
-		if sameURLHost(ep.BaseURL, baseURI) || sameURLHost(ep.APIBaseURL, baseURI) {
-			return ep, nil
+	endpoint, ok := pickEndpointForJob(endpoints, baseURI)
+	if !ok {
+		return params.ForgeEndpoint{}, runnerErrors.NewNotFoundError("no endpoint found for job")
+	}
+	return endpoint, nil
+}
+
+// pickEndpointForJob returns the endpoint that owns baseURI. Gitea builds job
+// URLs from the address of the request that queued the job, so the host can be
+// a browser origin while the endpoint is registered on the internal gateway.
+// When the host matches nothing and this controller serves a single endpoint of
+// this forge, that endpoint owns the job.
+// shortcut: this fallback ignores the host; add name-based resolution when a
+// controller serves several Gitea endpoints.
+func pickEndpointForJob(endpoints []params.ForgeEndpoint, baseURI string) (params.ForgeEndpoint, bool) {
+	for _, endpoint := range endpoints {
+		slog.Debug("checking endpoint", "base_uri", baseURI, "endpoint", endpoint.BaseURL)
+		if sameURLHost(endpoint.BaseURL, baseURI) || sameURLHost(endpoint.APIBaseURL, baseURI) {
+			return endpoint, true
 		}
 	}
-
-	return params.ForgeEndpoint{}, runnerErrors.NewNotFoundError("no endpoint found for job")
+	if len(endpoints) == 1 {
+		return endpoints[0], true
+	}
+	return params.ForgeEndpoint{}, false
 }
 
 func (r *Runner) DispatchWorkflowJob(hookTargetType, signature string, forgeType params.EndpointType, jobData []byte) error {
