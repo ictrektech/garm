@@ -964,3 +964,24 @@ type RestoreTemplateRequest struct {
 	// are ignored.
 	RestoreAll bool `json:"restore_all"`
 }
+
+// EnsureEntityParams describes the forge entity that must exist in GARM. Repo
+// is empty for an organization. Labels become the pool tags.
+type EnsureEntityParams struct {
+	Forge      string   `json:"forge,omitempty"`
+	Owner      string   `json:"owner,omitempty"`
+	Repo       string   `json:"repo,omitempty"`
+	Labels     []string `json:"labels,omitempty"`
+	MaxRunners uint     `json:"max_runners,omitempty"`
+}
+
+// EnsureEntityResult reports what an ensure call created and what it kept.
+type EnsureEntityResult struct {
+	Created        []string `json:"created"`
+	Existing       []string `json:"existing"`
+	OrganizationID string   `json:"organization_id,omitempty"`
+	RepositoryID   string   `json:"repository_id,omitempty"`
+	PoolID         string   `json:"pool_id,omitempty"`
+	WebhookURL     string   `json:"webhook_url,omitempty"`
+	WebhookSecret  string   `json:"webhook_secret,omitempty"`
+}

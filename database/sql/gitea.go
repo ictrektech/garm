@@ -309,13 +309,15 @@ func (s *sqlDatabase) getGiteaCredentialsByName(ctx context.Context, tx *gorm.DB
 			Preload("Organizations.Credentials")
 	}
 
-	userID, err := getUIDFromContext(ctx)
-	if err != nil {
-		return GiteaCredentials{}, fmt.Errorf("error fetching gitea credentials: %w", err)
+	if !auth.IsAdmin(ctx) {
+		userID, err := getUIDFromContext(ctx)
+		if err != nil {
+			return GiteaCredentials{}, fmt.Errorf("error fetching gitea credentials: %w", err)
+		}
+		q = q.Where("user_id = ?", userID)
 	}
-	q = q.Where("user_id = ?", userID)
 
-	err = q.Where("name = ?", name).First(&creds).Error
+	err := q.Where("name = ?", name).First(&creds).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return GiteaCredentials{}, runnerErrors.NewNotFoundError("gitea credentials %q not found", name)
