@@ -414,6 +414,8 @@ function Install-GarmAgent {
     $agentDir = "C:\garm-agent"
     mkdir -Force $agentDir
     $agentURL = Get-AgentURL
+    # The agent refuses a plain http endpoint unless told the transport is intentional.
+    $agentInsecure = if ($agentURL -match '^(https|wss)://') { "false" } else { "true" }
     $agentDownloadURL = Get-AgentDownloadURL
     $agentToken = Get-AgentToken
     $agentDownloadHeaders=@{
@@ -424,6 +426,7 @@ function Install-GarmAgent {
     # '
     Set-Content "$agentDir\garm-agent.toml" @"
 server_url = "$agentURL"
+force_insecure = $agentInsecure
 log_file = "C:/garm-agent/garm-agent.log"
 shell = "cmd.exe"
 enable_shell = $shellEnabled
