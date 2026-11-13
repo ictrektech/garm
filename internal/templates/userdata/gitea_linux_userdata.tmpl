@@ -65,6 +65,9 @@ if [ "$AGENT_MODE" == "true" ]; then
     sendStatus "Agent mode is enabled; setting up agent"
     DOWNLOAD_URL="{{ .AgentDownloadURL }}"
     AGENT_URL="{{ .AgentURL }}"
+    # The agent refuses a plain http endpoint unless told the transport is intentional.
+    AGENT_INSECURE="true"
+    case "$AGENT_URL" in https://*|wss://*) AGENT_INSECURE="false" ;; esac
     AGENT_TOKEN="{{ .AgentToken }}"
     AGENT_SHELL={{ .AgentShell }}
     sendStatus "Downloading agent from $DOWNLOAD_URL"
@@ -83,6 +86,7 @@ if [ "$AGENT_MODE" == "true" ]; then
     sendStatus "Creating config and systemd unit"
     cat > /etc/garm-agent/garm-agent.toml << EOF
 server_url = "$AGENT_URL"
+force_insecure = $AGENT_INSECURE
 log_file = "/var/log/garm-agent/garm-agent.log"
 work_dir = "$RUN_HOME"
 enable_shell = $AGENT_SHELL
