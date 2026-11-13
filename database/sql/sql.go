@@ -535,10 +535,10 @@ func (s *sqlDatabase) ensureTemplates() error {
 	// make sure we have a default forge/OSType template. Currently we have Windows
 	// and Linux for GitHub and Linux for Gitea.
 	defaults := []struct {
-		name    string
-		desc    string
-		osType  commonParams.OSType
-		forge   params.EndpointType
+		name   string
+		desc   string
+		osType commonParams.OSType
+		forge  params.EndpointType
 	}{
 		{"github_windows", "Default Windows runner install template for GitHub", commonParams.Windows, params.GithubEndpointType},
 		{"github_linux", "Default Linux runner install template for GitHub", commonParams.Linux, params.GithubEndpointType},
@@ -601,6 +601,7 @@ func (s *sqlDatabase) ensureTemplates() error {
 		}
 		templateID := getTplID(forgeType, osType)
 		if pool.TemplateID == 0 && templateID != 0 {
+			slog.InfoContext(adminCtx, "assigning the shipped default template to a pool that has none", "pool", pool.ID, "template_id", templateID)
 			updateParams := params.UpdatePoolParams{
 				TemplateID: &templateID,
 			}
@@ -624,6 +625,7 @@ func (s *sqlDatabase) ensureTemplates() error {
 		}
 		templateID := getTplID(forgeType, osType)
 		if scaleSet.TemplateID == 0 && templateID != 0 {
+			slog.InfoContext(adminCtx, "assigning the shipped default template to a scale set that has none", "scale_set", scaleSet.ID, "template_id", templateID)
 			updateParams := params.UpdateScaleSetParams{
 				TemplateID: &templateID,
 			}
@@ -726,13 +728,10 @@ func (s *sqlDatabase) migrateControllerInfo(hasMinAgeField, hasAgentURL bool) er
 }
 
 // preMigrationChecks performs checks before running migrations
-func (s *sqlDatabase) preMigrationChecks() (needsCredentialMigration, migrateTemplates, hasMinAgeField, hasAgentURL bool) {
+func (s *sqlDatabase) preMigrationChecks() (needsCredentialMigration, hasMinAgeField, hasAgentURL bool) {
 	// Check if credentials need migration
 	needsCredentialMigration = !s.conn.Migrator().HasTable(&GithubCredentials{}) ||
 		!s.conn.Migrator().HasTable(&GithubEndpoint{})
-
-	// Check if templates need migration
-	migrateTemplates = !s.conn.Migrator().HasTable(&Template{})
 
 	// Check for controller info fields
 	if s.conn.Migrator().HasTable(&ControllerInfo{}) {
@@ -768,8 +767,8 @@ func (s *sqlDatabase) migrateDB() error {
 		return err
 	}
 
-	// Check if we need to migrate credentials and templates
-	needsCredentialMigration, _, hasMinAgeField, hasAgentURL := s.preMigrationChecks()
+	// Check if we need to migrate credentials
+	needsCredentialMigration, hasMinAgeField, hasAgentURL := s.preMigrationChecks()
 
 	// Run main schema migration
 	s.conn.Exec("PRAGMA foreign_keys = OFF")

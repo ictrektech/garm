@@ -28,9 +28,9 @@ import (
 
 	runnerErrors "github.com/cloudbase/garm-provider-common/errors"
 	commonParams "github.com/cloudbase/garm-provider-common/params"
+	"github.com/cloudbase/garm/auth"
 	dbCommon "github.com/cloudbase/garm/database/common"
 	"github.com/cloudbase/garm/database/watcher"
-	"github.com/cloudbase/garm/auth"
 	garmTesting "github.com/cloudbase/garm/internal/testing"
 	"github.com/cloudbase/garm/params"
 )
@@ -464,6 +464,21 @@ func (s *TemplatesTestSuite) TestEnsureTemplatesKeepsUserTemplatesUntouched() {
 	s.Require().NoError(err)
 	s.Require().Equal(user.Username, mine.Owner)
 	s.Require().Equal(own, mine.Data, "a template owned by a user is not a shipped default")
+}
+
+func (s *TemplatesTestSuite) TestEnsureTemplatesSurvivesAnUnreadableTemplate() {
+	store, ok := s.Store.(*sqlDatabase)
+	s.Require().True(ok)
+
+	shipped, err := s.Store.GetTemplateByName(s.adminCtx, "gitea_linux")
+	s.Require().NoError(err)
+	s.Require().NoError(store.conn.Exec("update templates set data = ? where id = ?", []byte("not sealed"), shipped.ID).Error)
+
+	s.Require().NoError(store.ensureTemplates(), "one unreadable row must not keep the controller from starting")
+
+	var stored Template
+	s.Require().NoError(store.conn.Where("id = ?", shipped.ID).First(&stored).Error)
+	s.Require().Equal([]byte("not sealed"), stored.Data, "the unreadable row is left as it was")
 }
 
 func TestTemplatesTestSuite(t *testing.T) {

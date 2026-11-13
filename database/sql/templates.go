@@ -160,12 +160,16 @@ func (s *sqlDatabase) ensureSystemTemplate(ctx context.Context, def params.Creat
 	}
 	current, err := s.sqlToParamTemplate(stored)
 	if err != nil {
-		return params.Template{}, err
+		// An unreadable row must not keep the controller from starting: the pool
+		// reports the error when it uses the template.
+		slog.WarnContext(ctx, "cannot read a system template, leaving it unchanged", "template", def.Name, "error", err)
+		return params.Template{ID: stored.ID}, nil
 	}
 	if bytes.Equal(current.Data, def.Data) {
 		return current, nil
 	}
-	slog.InfoContext(ctx, "updating a system template to the one shipped with this build", "template", def.Name)
+	slog.WarnContext(ctx, "replacing a system template with the one shipped with this build", "template", def.Name,
+		"note", "pools and scale sets that use it take the new install script")
 	return s.UpdateTemplate(ctx, stored.ID, params.UpdateTemplateParams{Data: def.Data})
 }
 
