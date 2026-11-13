@@ -106,3 +106,25 @@ func TestVOSBearerToken(t *testing.T) {
 		t.Fatalf("vosBearerToken() = %q, want empty", got)
 	}
 }
+
+func TestVOSPermissionURL(t *testing.T) {
+	endpoint := runnerParams.ForgeEndpoint{
+		Name:       "vos-gitea",
+		BaseURL:    "http://172.17.0.1:1182/app/com.ictrek.gitea/",
+		APIBaseURL: "http://172.17.0.1:1182/app/com.ictrek.gitea/",
+	}
+
+	orgURL := vosPermissionURL(endpoint, runnerParams.EnsureEntityParams{Owner: "acme"})
+	if want := "http://172.17.0.1:1182/app/com.ictrek.gitea/api/v1/orgs/acme/hooks"; orgURL != want {
+		t.Fatalf("vosPermissionURL() = %q, want %q", orgURL, want)
+	}
+
+	repoURL := vosPermissionURL(endpoint, runnerParams.EnsureEntityParams{Owner: "acme", Repo: "ci-test"})
+	if want := "http://172.17.0.1:1182/app/com.ictrek.gitea/api/v1/repos/acme/ci-test"; repoURL != want {
+		t.Fatalf("vosPermissionURL() = %q, want %q", repoURL, want)
+	}
+
+	if got := vosPermissionURL(runnerParams.ForgeEndpoint{}, runnerParams.EnsureEntityParams{Owner: "acme"}); got != "" {
+		t.Fatalf("vosPermissionURL() = %q, want empty", got)
+	}
+}

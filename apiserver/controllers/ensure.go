@@ -15,16 +15,22 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	gErrors "github.com/cloudbase/garm-provider-common/errors"
 
 	"github.com/cloudbase/garm/auth"
 	runnerParams "github.com/cloudbase/garm/params"
+	"github.com/cloudbase/garm/runner"
 )
 
 const (
@@ -33,7 +39,17 @@ const (
 	vosEnsureMaxLabels         = 8
 	vosEnsureMaxLabelLength    = 50
 	vosEnsureDefaultLabel      = "garm-pools"
+	vosPermissionTimeout       = 5 * time.Second
 )
+
+// vosPermissionClient probes Gitea without following redirects, so a login
+// redirect counts as a denial.
+var vosPermissionClient = &http.Client{
+	Timeout: vosPermissionTimeout,
+	CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 // Gitea owner and repository names.
 var vosForgeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -63,14 +79,15 @@ func (a *APIController) VOSEnsureHandler(w http.ResponseWriter, r *http.Request)
 		handleError(ctx, w, gErrors.ErrUnauthorized)
 		return
 	}
-	// Until the Gitea permission check lands, only VOS administrators register
-	// entities.
+	adminCtx := auth.SetAdmin(userCtx, true)
 	if !user.IsAdmin {
-		handleError(ctx, w, gErrors.ErrUnauthorized)
-		return
+		if err := a.ensureGiteaPermission(adminCtx, param, vosBearerToken(r)); err != nil {
+			slog.WarnContext(ctx, "VOS ensure permission denied", "owner", param.Owner, "repo", param.Repo, "error", err)
+			handleError(ctx, w, gErrors.ErrUnauthorized)
+			return
+		}
 	}
 
-	adminCtx := auth.SetAdmin(userCtx, true)
 	result, err := a.r.EnsureGiteaEntity(adminCtx, param)
 	if err != nil {
 		slog.ErrorContext(ctx, "VOS ensure failed", "owner", param.Owner, "repo", param.Repo, "error", err)
@@ -147,4 +164,80 @@ func normalizeEnsureParams(param runnerParams.EnsureEntityParams) (runnerParams.
 		param.MaxRunners = vosEnsureMaxRunners
 	}
 	return param, nil
+}
+
+// ensureGiteaPermission checks the caller against Gitea. Listing the hooks of
+// an organization needs its owner or a site administrator. A repository needs
+// the admin permission of its API representation.
+func (a *APIController) ensureGiteaPermission(ctx context.Context, param runnerParams.EnsureEntityParams, token string) error {
+	if token == "" {
+		return gErrors.NewBadRequestError("missing token")
+	}
+	endpoints, err := a.r.ListGiteaEndpoints(ctx)
+	if err != nil {
+		return fmt.Errorf("error listing gitea endpoints: %w", err)
+	}
+	for _, endpoint := range endpoints {
+		if !strings.EqualFold(endpoint.Name, runner.VOSGiteaEndpointName) {
+			continue
+		}
+		probeURL := vosPermissionURL(endpoint, param)
+		if probeURL == "" {
+			return gErrors.NewBadRequestError("no probe url for the endpoint")
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, vosPermissionTimeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, nil)
+		if err != nil {
+			return fmt.Errorf("error building the permission request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json, text/html")
+		resp, err := vosPermissionClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("error calling gitea: %w", err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		if err != nil {
+			return fmt.Errorf("error reading the permission response: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("gitea returned %d", resp.StatusCode)
+		}
+		if param.Repo == "" {
+			return nil
+		}
+		var repo struct {
+			Permissions struct {
+				Admin bool `json:"admin"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(body, &repo); err != nil {
+			return fmt.Errorf("invalid repository response: %w", err)
+		}
+		if !repo.Permissions.Admin {
+			return gErrors.NewBadRequestError("no admin permission on %s/%s", param.Owner, param.Repo)
+		}
+		return nil
+	}
+	return gErrors.NewNotFoundError("no %s endpoint", runner.VOSGiteaEndpointName)
+}
+
+// vosPermissionURL returns the Gitea API call that proves the caller can
+// manage the entity. Web pages cannot authenticate a token, so every probe
+// uses the API.
+func vosPermissionURL(endpoint runnerParams.ForgeEndpoint, param runnerParams.EnsureEntityParams) string {
+	if param.Repo == "" {
+		base := strings.TrimRight(endpoint.BaseURL, "/")
+		if base == "" {
+			return ""
+		}
+		return base + "/api/v1/orgs/" + url.PathEscape(param.Owner) + "/hooks"
+	}
+	base := strings.TrimRight(endpoint.APIBaseURL, "/")
+	if base == "" {
+		return ""
+	}
+	return base + "/api/v1/repos/" + url.PathEscape(param.Owner) + "/" + url.PathEscape(param.Repo)
 }

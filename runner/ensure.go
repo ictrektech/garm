@@ -29,9 +29,9 @@ import (
 	"github.com/cloudbase/garm/params"
 )
 
-// vosGiteaEndpointName is the endpoint created for the Gitea running on the
+// VOSGiteaEndpointName is the endpoint created for the Gitea running on the
 // same VOS device.
-const vosGiteaEndpointName = "vos-gitea"
+const VOSGiteaEndpointName = "vos-gitea"
 
 // EnsureGiteaEntity creates the forge entity, its pool and its webhook secret
 // when they are missing. Repeated calls keep the existing objects.
@@ -183,11 +183,11 @@ func (r *Runner) vosGiteaCredentials(ctx context.Context) (params.ForgeCredentia
 		return params.ForgeCredentials{}, fmt.Errorf("error listing gitea credentials: %w", err)
 	}
 	for _, cred := range creds {
-		if strings.EqualFold(cred.Endpoint.Name, vosGiteaEndpointName) {
+		if strings.EqualFold(cred.Endpoint.Name, VOSGiteaEndpointName) {
 			return cred, nil
 		}
 	}
-	return params.ForgeCredentials{}, runnerErrors.NewConflictError("no credentials for endpoint %s", vosGiteaEndpointName)
+	return params.ForgeCredentials{}, runnerErrors.NewConflictError("no credentials for endpoint %s", VOSGiteaEndpointName)
 }
 
 // vosPoolParams returns the pool defaults of a VOS device. The provider comes
