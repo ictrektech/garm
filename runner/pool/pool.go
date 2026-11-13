@@ -1091,6 +1091,9 @@ func (r *basePoolManager) addInstanceToProvider(instance params.Instance) error 
 		CACertBundle:      caBundles,
 		GitHubRunnerGroup: instance.GitHubRunnerGroup,
 		JitConfigEnabled:  hasJITConfig,
+		// A runner serves one job, so boot time matters more than on-boot
+		// updates. cloud-init skips both the index download and the upgrade.
+		UserDataOptions: commonParams.UserDataOptions{DisableUpdatesOnBoot: true},
 	}
 	// We use the template management system unless:
 	//   * there is no template associated with the pool/scale set

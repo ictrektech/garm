@@ -64,6 +64,12 @@ function fail() {
 	exit 1
 }
 
+# Boot updates are off, so cloud-init no longer installs these. The runner is
+# a tarball here, so both tools are needed.
+if ! command -v curl >/dev/null || ! command -v tar >/dev/null; then
+	sudo apt-get update -qq && sudo apt-get install -y -qq curl tar || fail "failed to install curl and tar"
+fi
+
 {{- if .AgentMode }}
 AGENT_MODE="true"
 {{- else }}

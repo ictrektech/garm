@@ -35,6 +35,19 @@ func TestAgentScriptsStateTheTransport(t *testing.T) {
 			if !strings.Contains(string(data), "force_insecure") {
 				t.Errorf("%s/%s: the agent configuration does not set force_insecure", forge, osType)
 			}
+			// Boot updates are off, so cloud-init no longer installs these.
+			if osType != commonParams.Linux {
+				continue
+			}
+			tools := []string{"command -v curl"}
+			if forge == params.GithubEndpointType {
+				tools = append(tools, "command -v tar") // the github runner is a tarball
+			}
+			for _, tool := range tools {
+				if !strings.Contains(string(data), tool) {
+					t.Errorf("%s/%s: the script does not check for %s", forge, osType, tool)
+				}
+			}
 		}
 	}
 }
