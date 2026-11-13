@@ -30,6 +30,7 @@ import (
 	commonParams "github.com/cloudbase/garm-provider-common/params"
 	dbCommon "github.com/cloudbase/garm/database/common"
 	"github.com/cloudbase/garm/database/watcher"
+	"github.com/cloudbase/garm/auth"
 	garmTesting "github.com/cloudbase/garm/internal/testing"
 	"github.com/cloudbase/garm/params"
 )
@@ -420,6 +421,49 @@ func (s *TemplatesTestSuite) TestDeleteSystemTemplateAsNonAdmin() {
 	// Since both contexts are admin for simplicity, we'll skip this test
 	// In a real scenario, you'd set up a proper non-admin context
 	s.T().Skip("Skipping non-admin test - requires proper user context setup")
+}
+
+func (s *TemplatesTestSuite) TestEnsureTemplatesRefreshesSystemTemplates() {
+	store, ok := s.Store.(*sqlDatabase)
+	s.Require().True(ok)
+
+	shipped, err := s.Store.GetTemplateByName(s.adminCtx, "gitea_linux")
+	s.Require().NoError(err)
+	s.Require().Contains(string(shipped.Data), "force_insecure", "the default script carries the transport of the platform")
+
+	old := []byte("#!/bin/bash\necho script from an older build\n")
+	_, err = s.Store.UpdateTemplate(s.adminCtx, shipped.ID, params.UpdateTemplateParams{Data: old})
+	s.Require().NoError(err)
+
+	s.Require().NoError(store.ensureTemplates())
+
+	refreshed, err := s.Store.GetTemplateByName(s.adminCtx, "gitea_linux")
+	s.Require().NoError(err)
+	s.Require().Equal(shipped.ID, refreshed.ID, "the pool keeps pointing at the same template")
+	s.Require().Contains(string(refreshed.Data), "force_insecure", "an upgrade fixes pools that already exist")
+}
+
+func (s *TemplatesTestSuite) TestEnsureTemplatesKeepsUserTemplatesUntouched() {
+	store, ok := s.Store.(*sqlDatabase)
+	s.Require().True(ok)
+
+	user := garmTesting.CreateGARMTestUser(s.adminCtx, "templateowner", s.Store, s.T())
+	userCtx := auth.PopulateContext(context.Background(), user, nil)
+	own := []byte("#!/bin/bash\necho my own script\n")
+	created, err := s.Store.CreateTemplate(userCtx, params.CreateTemplateParams{
+		Name:      "gitea_linux",
+		OSType:    commonParams.Linux,
+		ForgeType: params.GiteaEndpointType,
+		Data:      own,
+	})
+	s.Require().NoError(err)
+
+	s.Require().NoError(store.ensureTemplates())
+
+	mine, err := s.Store.GetTemplate(s.adminCtx, created.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(user.Username, mine.Owner)
+	s.Require().Equal(own, mine.Data, "a template owned by a user is not a shipped default")
 }
 
 func TestTemplatesTestSuite(t *testing.T) {

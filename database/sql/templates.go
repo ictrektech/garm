@@ -15,9 +15,11 @@
 package sql
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -141,6 +143,30 @@ func (s *sqlDatabase) GetTemplateByName(ctx context.Context, name string) (param
 		return params.Template{}, fmt.Errorf("failed to convert template: %w", err)
 	}
 	return ret, nil
+}
+
+// ensureSystemTemplate creates a default template shipped with this build, or
+// brings the stored one in line with it. A system template is the runner install
+// script of a pool, so an upgraded controller has to be able to fix pools that
+// already exist instead of leaving them on the script they were created with.
+func (s *sqlDatabase) ensureSystemTemplate(ctx context.Context, def params.CreateTemplateParams) (params.Template, error) {
+	var stored Template
+	err := s.conn.Where("name = ? and user_id is null", def.Name).First(&stored).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return params.Template{}, fmt.Errorf("failed to look up template: %w", err)
+	}
+	if stored.ID == 0 {
+		return s.CreateTemplate(ctx, def)
+	}
+	current, err := s.sqlToParamTemplate(stored)
+	if err != nil {
+		return params.Template{}, err
+	}
+	if bytes.Equal(current.Data, def.Data) {
+		return current, nil
+	}
+	slog.InfoContext(ctx, "updating a system template to the one shipped with this build", "template", def.Name)
+	return s.UpdateTemplate(ctx, stored.ID, params.UpdateTemplateParams{Data: def.Data})
 }
 
 func (s *sqlDatabase) CreateTemplate(ctx context.Context, param params.CreateTemplateParams) (template params.Template, err error) {

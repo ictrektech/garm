@@ -531,111 +531,60 @@ func (s *sqlDatabase) enableIncrementalVacuum(conn *gorm.DB, dbName string) erro
 	return nil
 }
 
-func (s *sqlDatabase) ensureTemplates(migrateTemplates bool) error {
-	if !migrateTemplates {
-		return nil
-	}
+func (s *sqlDatabase) ensureTemplates() error {
 	// make sure we have a default forge/OSType template. Currently we have Windows
 	// and Linux for GitHub and Linux for Gitea.
-	githubWindowsData, err := templates.GetTemplateContent(commonParams.Windows, params.GithubEndpointType)
-	if err != nil {
-		return fmt.Errorf("failed to get windows template for github: %w", err)
-	}
-
-	githubLinuxData, err := templates.GetTemplateContent(commonParams.Linux, params.GithubEndpointType)
-	if err != nil {
-		return fmt.Errorf("failed to get linux template for github: %w", err)
-	}
-
-	giteaLinuxData, err := templates.GetTemplateContent(commonParams.Linux, params.GiteaEndpointType)
-	if err != nil {
-		return fmt.Errorf("failed to get linux template for gitea: %w", err)
-	}
-
-	giteaWindowsData, err := templates.GetTemplateContent(commonParams.Windows, params.GiteaEndpointType)
-	if err != nil {
-		return fmt.Errorf("failed to get windows template for gitea: %w", err)
+	defaults := []struct {
+		name    string
+		desc    string
+		osType  commonParams.OSType
+		forge   params.EndpointType
+	}{
+		{"github_windows", "Default Windows runner install template for GitHub", commonParams.Windows, params.GithubEndpointType},
+		{"github_linux", "Default Linux runner install template for GitHub", commonParams.Linux, params.GithubEndpointType},
+		{"gitea_linux", "Default Linux runner install template for Gitea", commonParams.Linux, params.GiteaEndpointType},
+		{"gitea_windows", "Default Windows runner install template for Gitea", commonParams.Windows, params.GiteaEndpointType},
 	}
 
 	adminCtx := auth.GetAdminContext(s.ctx)
-
-	githubWindowsParams := params.CreateTemplateParams{
-		Name:        "github_windows",
-		Description: "Default Windows runner install template for GitHub",
-		OSType:      commonParams.Windows,
-		ForgeType:   params.GithubEndpointType,
-		Data:        githubWindowsData,
-		IsSystem:    true,
-	}
-	githubWindowsSystemTemplate, err := s.CreateTemplate(adminCtx, githubWindowsParams)
-	if err != nil {
-		return fmt.Errorf("failed to create github windows template: %w", err)
-	}
-
-	githubLinuxParams := params.CreateTemplateParams{
-		Name:        "github_linux",
-		Description: "Default Linux runner install template for GitHub",
-		OSType:      commonParams.Linux,
-		ForgeType:   params.GithubEndpointType,
-		Data:        githubLinuxData,
-		IsSystem:    true,
-	}
-	githubLinuxSystemTemplate, err := s.CreateTemplate(adminCtx, githubLinuxParams)
-	if err != nil {
-		return fmt.Errorf("failed to create github linux template: %w", err)
-	}
-
-	giteaLinuxParams := params.CreateTemplateParams{
-		Name:        "gitea_linux",
-		Description: "Default Linux runner install template for Gitea",
-		OSType:      commonParams.Linux,
-		ForgeType:   params.GiteaEndpointType,
-		Data:        giteaLinuxData,
-		IsSystem:    true,
-	}
-	giteaLinuxSystemTemplate, err := s.CreateTemplate(adminCtx, giteaLinuxParams)
-	if err != nil {
-		return fmt.Errorf("failed to create gitea linux template: %w", err)
-	}
-
-	giteaWindowsParams := params.CreateTemplateParams{
-		Name:        "gitea_windows",
-		Description: "Default Windows runner install template for Gitea",
-		OSType:      commonParams.Windows,
-		ForgeType:   params.GiteaEndpointType,
-		Data:        giteaWindowsData,
-		IsSystem:    true,
-	}
-	giteaWindowsSystemTemplate, err := s.CreateTemplate(adminCtx, giteaWindowsParams)
-	if err != nil {
-		return fmt.Errorf("failed to create gitea windows template: %w", err)
+	ids := map[string]uint{}
+	for _, def := range defaults {
+		data, err := templates.GetTemplateContent(def.osType, def.forge)
+		if err != nil {
+			return fmt.Errorf("failed to get %s template: %w", def.name, err)
+		}
+		tpl, err := s.ensureSystemTemplate(adminCtx, params.CreateTemplateParams{
+			Name:        def.name,
+			Description: def.desc,
+			OSType:      def.osType,
+			ForgeType:   def.forge,
+			Data:        data,
+			IsSystem:    true,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure %s template: %w", def.name, err)
+		}
+		ids[def.name] = tpl.ID
 	}
 
 	getTplID := func(forgeType params.EndpointType, osType commonParams.OSType) uint {
-		var templateID uint
 		switch forgeType {
 		case params.GiteaEndpointType:
-			switch osType {
-			case commonParams.Linux:
-				templateID = giteaLinuxSystemTemplate.ID
-			case commonParams.Windows:
-				templateID = giteaWindowsSystemTemplate.ID
-			default:
-				return 0
+			if osType == commonParams.Linux {
+				return ids["gitea_linux"]
+			}
+			if osType == commonParams.Windows {
+				return ids["gitea_windows"]
 			}
 		case params.GithubEndpointType:
-			switch osType {
-			case commonParams.Linux:
-				templateID = githubLinuxSystemTemplate.ID
-			case commonParams.Windows:
-				templateID = githubWindowsSystemTemplate.ID
-			default:
-				return 0
+			if osType == commonParams.Linux {
+				return ids["github_linux"]
 			}
-		default:
-			return 0
+			if osType == commonParams.Windows {
+				return ids["github_windows"]
+			}
 		}
-		return templateID
+		return 0
 	}
 
 	pools, err := s.ListAllPools(s.ctx)
@@ -820,7 +769,7 @@ func (s *sqlDatabase) migrateDB() error {
 	}
 
 	// Check if we need to migrate credentials and templates
-	needsCredentialMigration, migrateTemplates, hasMinAgeField, hasAgentURL := s.preMigrationChecks()
+	needsCredentialMigration, _, hasMinAgeField, hasAgentURL := s.preMigrationChecks()
 
 	// Run main schema migration
 	s.conn.Exec("PRAGMA foreign_keys = OFF")
@@ -878,7 +827,7 @@ func (s *sqlDatabase) migrateDB() error {
 	}
 
 	// Ensure templates exist
-	if err := s.ensureTemplates(migrateTemplates); err != nil {
+	if err := s.ensureTemplates(); err != nil {
 		return fmt.Errorf("failed to create default templates: %w", err)
 	}
 
