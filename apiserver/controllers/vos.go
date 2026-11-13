@@ -29,6 +29,7 @@ import (
 	gErrors "github.com/cloudbase/garm-provider-common/errors"
 	"github.com/cloudbase/garm/auth"
 	runnerParams "github.com/cloudbase/garm/params"
+	"github.com/cloudbase/garm/runner"
 )
 
 type vosLoginParams struct {
@@ -85,21 +86,7 @@ func (a *APIController) VOSLoginHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 const vosLocalGitea = "http://gitea:8080"
-const vosGiteaPath = "/app/com.ictrek.gitea/"
 const vosAppPath = "/app/com.ictrek.garm"
-
-// vosInternalBase is the plain HTTP gateway that other services on this device
-// (Gitea webhooks, LXD runner instances) use to reach GARM. It must not be the
-// browser facing TLS origin: runner instances cannot verify the platform
-// certificate, and the public URL is often an external tunnel.
-const vosInternalBase = "http://172.17.0.1:1182"
-
-func vosInternalBaseURL() string {
-	if base := strings.TrimSpace(os.Getenv("GARM_VOS_INTERNAL_BASE")); base != "" {
-		return strings.TrimRight(base, "/")
-	}
-	return vosInternalBase
-}
 
 var vosIntegrationMu sync.Mutex
 
@@ -137,7 +124,7 @@ func (a *APIController) configureVOSIntegration(ctx context.Context) {
 
 	info, err := a.r.GetControllerInfo(ctx)
 	if err == nil {
-		base := vosInternalBaseURL() + vosAppPath
+		base := runner.VOSInternalBaseURL() + vosAppPath
 		missing := func(current, path string) *string {
 			if current != "" {
 				return nil
@@ -164,7 +151,7 @@ func (a *APIController) configureVOSIntegration(ctx context.Context) {
 	}
 	// Gitea is reached over the same internal gateway, both by GARM and by the
 	// runner instances. vosLocalGitea is only used for the reachability probe.
-	giteaURL := vosInternalBaseURL() + vosGiteaPath
+	giteaURL := runner.VOSGiteaURL()
 	for _, endpoint := range endpoints {
 		if endpoint.Name == "vos-gitea" || strings.TrimRight(endpoint.BaseURL, "/") == strings.TrimRight(giteaURL, "/") ||
 			strings.TrimRight(endpoint.APIBaseURL, "/") == strings.TrimRight(giteaURL, "/") {

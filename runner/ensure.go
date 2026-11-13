@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -32,6 +33,10 @@ import (
 // VOSGiteaEndpointName is the endpoint created for the Gitea running on the
 // same VOS device.
 const VOSGiteaEndpointName = "vos-gitea"
+
+// VOSGiteaCredentialName is the name of the credentials GARM creates together
+// with the local endpoint.
+const VOSGiteaCredentialName = "vos-gitea-token"
 
 // EnsureGiteaEntity creates the forge entity, its pool and its webhook secret
 // when they are missing. Repeated calls keep the existing objects.
@@ -50,7 +55,10 @@ func (r *Runner) EnsureOrganization(ctx context.Context, param params.EnsureEnti
 
 	result := params.EnsureEntityResult{Created: []string{}, Existing: []string{}}
 
-	creds, err := r.vosGiteaCredentials(ctx)
+	if _, err := r.ensureGiteaEndpoint(ctx); err != nil {
+		return params.EnsureEntityResult{}, err
+	}
+	creds, err := r.ensureGiteaCredentials(ctx, param.GiteaToken)
 	if err != nil {
 		return params.EnsureEntityResult{}, err
 	}
@@ -104,7 +112,10 @@ func (r *Runner) EnsureRepository(ctx context.Context, param params.EnsureEntity
 
 	result := params.EnsureEntityResult{Created: []string{}, Existing: []string{}}
 
-	creds, err := r.vosGiteaCredentials(ctx)
+	if _, err := r.ensureGiteaEndpoint(ctx); err != nil {
+		return params.EnsureEntityResult{}, err
+	}
+	creds, err := r.ensureGiteaCredentials(ctx, param.GiteaToken)
 	if err != nil {
 		return params.EnsureEntityResult{}, err
 	}
@@ -175,6 +186,72 @@ func (r *Runner) ensurePool(ctx context.Context, entity params.ForgeEntity, para
 	return pool.ID, true, nil
 }
 
+// ensureGiteaEndpoint creates the endpoint of the local Gitea when it is
+// missing, so a reset controller needs no manual setup.
+func (r *Runner) ensureGiteaEndpoint(ctx context.Context) (params.ForgeEndpoint, error) {
+	endpoint, err := r.store.GetGiteaEndpoint(ctx, VOSGiteaEndpointName)
+	if err == nil {
+		return endpoint, nil
+	}
+	if !errors.Is(err, runnerErrors.ErrNotFound) {
+		return params.ForgeEndpoint{}, fmt.Errorf("error fetching endpoint %s: %w", VOSGiteaEndpointName, err)
+	}
+	endpoint, err = r.store.CreateGiteaEndpoint(ctx, params.CreateGiteaEndpointParams{
+		Name:        VOSGiteaEndpointName,
+		Description: "Gitea on this VOS device",
+		BaseURL:     VOSGiteaURL(),
+		APIBaseURL:  VOSGiteaURL(),
+	})
+	if err != nil {
+		return params.ForgeEndpoint{}, fmt.Errorf("error creating endpoint %s: %w", VOSGiteaEndpointName, err)
+	}
+	return endpoint, nil
+}
+
+// ensureGiteaCredentials returns the credentials of the local endpoint and
+// stores the token of the caller when they are missing or differ.
+func (r *Runner) ensureGiteaCredentials(ctx context.Context, token string) (params.ForgeCredentials, error) {
+	creds, err := r.vosGiteaCredentials(ctx)
+	switch {
+	case errors.Is(err, runnerErrors.ErrNotFound):
+		if token == "" {
+			return params.ForgeCredentials{}, runnerErrors.NewConflictError("no credentials for endpoint %s", VOSGiteaEndpointName)
+		}
+		created, createErr := r.store.CreateGiteaCredentials(ctx, params.CreateGiteaCredentialsParams{
+			Name:        VOSGiteaCredentialName,
+			Description: "Token issued to a VOS user by the local Gitea",
+			Endpoint:    VOSGiteaEndpointName,
+			AuthType:    params.ForgeAuthTypePAT,
+			PAT:         params.GithubPAT{OAuth2Token: token},
+		})
+		if createErr != nil {
+			return params.ForgeCredentials{}, fmt.Errorf("error creating credentials: %w", createErr)
+		}
+		return created, nil
+	case err != nil:
+		return params.ForgeCredentials{}, err
+	}
+	if token == "" || storedToken(creds) == token {
+		return creds, nil
+	}
+	updated, err := r.store.UpdateGiteaCredentials(ctx, creds.ID, params.UpdateGiteaCredentialsParams{
+		PAT: &params.GithubPAT{OAuth2Token: token},
+	})
+	if err != nil {
+		return params.ForgeCredentials{}, fmt.Errorf("error updating credentials: %w", err)
+	}
+	return updated, nil
+}
+
+// storedToken returns the PAT of the credentials, or an empty string.
+func storedToken(creds params.ForgeCredentials) string {
+	var pat params.GithubPAT
+	if err := json.Unmarshal(creds.CredentialsPayload, &pat); err != nil {
+		return ""
+	}
+	return pat.OAuth2Token
+}
+
 // vosGiteaCredentials returns the credentials registered for the local Gitea
 // endpoint.
 func (r *Runner) vosGiteaCredentials(ctx context.Context) (params.ForgeCredentials, error) {
@@ -187,7 +264,7 @@ func (r *Runner) vosGiteaCredentials(ctx context.Context) (params.ForgeCredentia
 			return cred, nil
 		}
 	}
-	return params.ForgeCredentials{}, runnerErrors.NewConflictError("no credentials for endpoint %s", VOSGiteaEndpointName)
+	return params.ForgeCredentials{}, runnerErrors.NewNotFoundError("no credentials for endpoint %s", VOSGiteaEndpointName)
 }
 
 // vosPoolParams returns the pool defaults of a VOS device. The provider comes

@@ -973,6 +973,9 @@ type EnsureEntityParams struct {
 	Repo       string   `json:"repo,omitempty"`
 	Labels     []string `json:"labels,omitempty"`
 	MaxRunners uint     `json:"max_runners,omitempty"`
+	// GiteaToken is a token of the caller. GARM stores it as the credentials
+	// of the local Gitea endpoint when they are missing or differ.
+	GiteaToken string `json:"gitea_token,omitempty"`
 }
 
 // EnsureEntityResult reports what an ensure call created and what it kept.
