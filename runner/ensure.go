@@ -72,7 +72,7 @@ func (r *Runner) EnsureOrganization(ctx context.Context, param params.EnsureEnti
 			WebhookSecret:    newWebhookSecret(),
 			PoolBalancerType: params.PoolBalancerTypeRoundRobin,
 			ForgeType:        params.GiteaEndpointType,
-			AgentMode:        true,
+			AgentMode:        false,
 		})
 		if err != nil {
 			return params.EnsureEntityResult{}, fmt.Errorf("error creating organization %s: %w", param.Owner, err)
@@ -130,7 +130,7 @@ func (r *Runner) EnsureRepository(ctx context.Context, param params.EnsureEntity
 			WebhookSecret:    newWebhookSecret(),
 			PoolBalancerType: params.PoolBalancerTypeRoundRobin,
 			ForgeType:        params.GiteaEndpointType,
-			AgentMode:        true,
+			AgentMode:        false,
 		})
 		if err != nil {
 			return params.EnsureEntityResult{}, fmt.Errorf("error creating repository %s/%s: %w", param.Owner, param.Repo, err)
