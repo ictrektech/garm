@@ -1,0 +1,29 @@
+# VOS 联调覆盖：叠加在 docker-compose.dev.yml 之上。
+#
+#   make vos-dev         起容器 + 装 Traefik 临时路由 + 跟随日志，Ctrl-C 统一收尾
+#   make vos-dev-down    撤路由 + 停容器
+#
+# 只写 Traefik 临时路由文件，不动平台上已安装的 garm 容器；
+# 删掉路由文件后流量立即回到已安装应用。
+#
+# 独立项目名：与 docker-compose.dev.yml 单独起的那套（项目 garm-dev）并存。
+# 项目名相同、容器名不同时，compose 会把对方当作配置变更而重建，两套互相摧毁。
+name: garm-vos-dev
+
+services:
+  garm:
+    container_name: ${VOS_DEV_CONTAINER_NAME:-garm-vos-dev}
+    networks:
+      vos_default:
+        aliases:
+          - garm-dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 与已安装应用一致的 VOS 单点登录；userinfo 走设备内网网关
+      GARM_VOS_AUTH_ENABLED: "true"
+      GARM_VOS_USERINFO_URL: ${GARM_VOS_USERINFO_URL:-http://172.17.0.1:1182/v1000/oauth2/userinfo}
+
+networks:
+  vos_default:
+    external: true

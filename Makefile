@@ -122,6 +122,26 @@ webui-test:
 	(cd webapp && npm install)
 	(cd webapp && npm run test:run)
 
+##@ Dev (VOS 内联调)
+
+vos-dev: ## 起后端热重载（air）+ 前端 HMR（vite）+ Traefik 临时路由，Ctrl-C 收尾
+	./scripts/vos-dev.sh up
+
+vos-dev-debug: ## 同上，但用 dlv 断点模式（宿主机 :39097），无热重载
+	VOS_DEV_DEBUG=1 ./scripts/vos-dev.sh up
+
+vos-dev-down: ## 撤临时路由并停止 dev 容器与前端 dev server
+	./scripts/vos-dev.sh down
+
+vos-dev-logs: ## 跟随 dev 容器日志
+	./scripts/vos-dev.sh logs
+
+vos-dev-status: ## 查看 dev 容器健康与临时路由
+	./scripts/vos-dev.sh status
+
+vos-dev-build: ## 只重建 dev 镜像（改 Dockerfile / air.toml / entrypoint.sh 后执行）
+	docker compose -f docker/dev/docker-compose.dev.yml build
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to

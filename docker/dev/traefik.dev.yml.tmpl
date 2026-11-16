@@ -1,0 +1,26 @@
+# Traefik 临时联调路由模板 — 由 scripts/vos-dev.sh 渲染后写入
+# /etc/traefik/dynamic-conf/com.ictrek.garm.dev.yml
+#
+# 两条路由，优先级都高于平台已安装应用的 docker label 路由（按规则长度算，约 34）：
+#   __BASE_PATH__/ui  → 前端 dev server（HMR 热更新）
+#   __BASE_PATH__     → garm 后端（API）
+# 删除本文件即回退到平台上已安装的应用。
+http:
+  routers:
+    garm-dev-ui:
+      rule: "PathPrefix(`__BASE_PATH__/ui`)"
+      service: garm-dev-ui
+      priority: 2100
+    garm-dev-api:
+      rule: "PathPrefix(`__BASE_PATH__`)"
+      service: garm-dev-api
+      priority: 2000
+  services:
+    garm-dev-ui:
+      loadBalancer:
+        servers:
+          - url: "http://__HOST__:__WEB_PORT__"
+    garm-dev-api:
+      loadBalancer:
+        servers:
+          - url: "http://__HOST__:__PORT__"

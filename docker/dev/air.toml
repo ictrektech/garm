@@ -1,0 +1,23 @@
+# air 配置：改 .go 文件后重编译并重启 garm。只用于 docker/dev。
+# 编译参数与仓库根 Makefile 的 build 目标一致（vendor + sqlite cgo tags）。
+root = "/app"
+tmp_dir = "/tmp/air"
+
+[build]
+  cmd = "go build -mod=vendor -tags osusergo,netgo,sqlite_omit_load_extension -ldflags \"-X github.com/cloudbase/garm/util/appdefaults.Version=dev-$(git rev-parse --short HEAD)\" -o /tmp/garm ./cmd/garm"
+  # 产物放 /tmp：/app 是宿主目录，容器内以 root 写出的文件会让宿主 make build 失败
+  bin = "/tmp/garm"
+  # 额外启动参数：air 自己不会解析 bin 里的空格
+  args_bin = ["--config", "/data/config.toml"]
+  include_ext = ["go", "tmpl", "html"]
+  # 不排除 webapp/assets：前端是 go:embed 进二进制的，make build-webui 之后
+  # 改到 index.html 要能触发重编译。node_modules 与 build 必须排除，否则 inotify 爆掉。
+  exclude_dir = ["vendor", "ictrek.app", "docker", "testdata", "test", "bin", "build", "node_modules", "tasks", ".git", ".dev-data", "webapp/node_modules", "webapp/build", "webapp/src", "webapp/static", "webapp/assets/_app"]
+  delay = 1000
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "3s"
+  log = "/tmp/air/build-errors.log"
+
+[log]
+  time = true

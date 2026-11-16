@@ -6,13 +6,18 @@ export default defineConfig(({ mode }) => {
 	// Third param '' means load all variables, not just those prefixed with VITE_
 	const env = loadEnv(mode, process.cwd(), '');
 
+	// 平台内联调时（make vos-dev）base 也带前缀，API 请求随之变成 <base>/api，
+	// dev server 要代理这个前缀。不设前缀时保持原来的 /api。
+	const appBase = process.env.VITE_GARM_BASE_PATH || env.VITE_GARM_BASE_PATH || '';
+	const apiPrefix = appBase ? `${appBase}/api` : '/api';
+
 	console.log(env.VITE_GARM_API_URL);
 	return {
 		plugins: [sveltekit()],
 		server: {
 			proxy: {
 				// Proxy API calls to GARM backend
-				'/api': {
+				[apiPrefix]: {
 					target: env.VITE_GARM_API_URL,
 					changeOrigin: true,
 					ws: true,
@@ -26,11 +31,10 @@ export default defineConfig(({ mode }) => {
 						proxy.on('proxyRes', (proxyRes, req, _res) => {
 							console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
 						});
-		  			},
+					},
 					secure: false
 				}
 			}
 		}
 	};
 });
-

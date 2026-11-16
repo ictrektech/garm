@@ -36,5 +36,10 @@ webapp/build/
 # VOS app build output
 ictrek.app/dist/
 
+# VOS 联调（make vos-dev）生成的本地数据：sqlite、config.toml、secrets.env
+.dev-data/
+# 从已安装镜像提取出来的 provider 二进制
+.dev-providers/
+
 # Local task notes
 tasks/

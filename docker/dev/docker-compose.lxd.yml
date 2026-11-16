@@ -1,0 +1,7 @@
+# 只在宿主存在 LXD socket 时由 scripts/vos-dev.sh 附加。
+# 单独成文件的原因：docker compose 无法条件挂载，而挂一个不存在的 socket
+# 会在宿主创建同名目录，破坏 LXD 布局。
+services:
+  garm:
+    volumes:
+      - ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}:${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}

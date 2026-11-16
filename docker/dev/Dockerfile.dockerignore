@@ -1,0 +1,17 @@
+# 只对 docker/dev/Dockerfile 生效（BuildKit 按 Dockerfile 名匹配同名 .dockerignore）。
+# 根 .dockerignore 不能加这些：生产 Dockerfile 用 ADD . 并且要 .git 与 vendor。
+#
+# dev 镜像只 COPY docker/dev/entrypoint.sh，源码与 vendor 都是运行时挂载，
+# 因此上下文不用包含它们。排除后每次 --build 少传约 95MB（.git 46MB + vendor 49MB）。
+.git
+.dev-data
+.dev-providers
+vendor
+webapp
+ictrek.app
+docs
+bin
+build
+release
+coverage
+tasks

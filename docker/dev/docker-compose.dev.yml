@@ -1,0 +1,63 @@
+# garm dev 容器：源码 bind mount + air 热重载。
+#
+# 手动用法（VOS 联调请用 make vos-dev，它会叠加 docker-compose.vos-dev.yml）：
+#   docker compose -f docker/dev/docker-compose.dev.yml up
+#
+# 改动生效方式：
+#   - .go 源码：保存即重编译重启（air），无需重建镜像
+#   - 只有 Dockerfile / air.toml / entrypoint.sh 的改动才需要 make vos-dev-build
+#   - 前端产物是编译期嵌入的，改 webapp 后需要 make build-webui 再触发一次重编译
+name: garm-dev
+
+services:
+  garm:
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+    image: garm:dev
+    container_name: garm-dev
+    working_dir: /app
+    ports:
+      # 宿主端口避开平台上已安装应用占用的 9997
+      - "${VOS_DEV_PORT:-38097}:9997"
+      # 仅 VOS_DEV_DEBUG=1 时使用（dlv headless）。dlv 无认证，只绑宿主回环；
+      # 容器里还挂着 LXD socket，发布到 0.0.0.0 等于把宿主机交给同网段的人。
+      - "127.0.0.1:${VOS_DEV_DELVE_PORT:-39097}:2345"
+    volumes:
+      # 源码热重载：容器内 /app 就是工作区（编译产物写 /tmp，不落在宿主机）
+      - ../..:/app
+      # 运行数据（sqlite、config.toml、secrets.env），与已安装应用的 /data 隔离
+      - ${DEV_DATA_DIR:-../../.dev-data}:/data
+      # 复用 VOS 交付里的 base-path 与 config.toml.tpl，保证与已安装应用同源
+      - ../../ictrek.app/src/garm:/etc/garm:ro
+      # provider 二进制，由 scripts/vos-dev.sh 从已安装镜像里提取；空目录=无 provider
+      - ${GARM_DEV_PROVIDER_DIR:-../../.dev-providers}:/opt/garm/providers.d:ro
+      # 编译缓存：重启容器不用全量重编译
+      - garm-dev-gocache:/root/.cache/go-build
+    environment:
+      GARM_LOG_LEVEL: ${GARM_LOG_LEVEL:-debug}
+      VOS_DEV_DEBUG: ${VOS_DEV_DEBUG:-0}
+      # 与交付 compose 同名同默认值；provider 配置由入口脚本渲染
+      GARM_LXD_INSTANCE_TYPE: ${GARM_LXD_INSTANCE_TYPE:-container}
+      GARM_LXD_PROJECT: ${GARM_LXD_PROJECT:-default}
+      GARM_LXD_SOCKET_PATH: ${GARM_LXD_SOCKET_PATH:-/var/snap/lxd/common/lxd/unix.socket}
+    # dlv 需要 ptrace
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      # 路径从 base-path 文件读，避免和 ictrek.app 里的定义分叉
+      test: ["CMD-SHELL", "wget -q -O /dev/null \"http://127.0.0.1:9997$$(cat /etc/garm/base-path)/ui/\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      # 首次冷编译 + 数据库迁移
+      start_period: 240s
+      retries: 3
+    restart: "no"
+
+volumes:
+  # 显式命名：项目名不同（garm-dev / garm-vos-dev）时共用同一份编译缓存。
+  garm-dev-gocache:
+    name: garm-dev-gocache
