@@ -203,6 +203,9 @@ func (i *instanceManager) handleCreateInstanceInProvider(instance params.Instanc
 		GitHubRunnerGroup: i.scaleSet.GitHubRunnerGroup,
 		JitConfigEnabled:  true,
 	}
+	if garmUtil.ProviderNeedsDisableUpdatesDefault(i.scaleSet.ProviderName) {
+		bootstrapArgs = garmUtil.MaybeAddDisableUpdatesToExtraSpecs(i.ctx, bootstrapArgs)
+	}
 	// We use the template management system unless:
 	//   * there is no template associated with the pool/scale set
 	//   * user explicitly overwrites the install template via extra specs

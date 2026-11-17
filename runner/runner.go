@@ -43,6 +43,7 @@ import (
 	"github.com/cloudbase/garm/runner/common"
 	"github.com/cloudbase/garm/runner/pool"
 	"github.com/cloudbase/garm/runner/providers"
+	garmUtil "github.com/cloudbase/garm/util"
 	"github.com/cloudbase/garm/util/github"
 	"github.com/cloudbase/garm/util/github/scalesets"
 	workersCommon "github.com/cloudbase/garm/workers/common"
@@ -945,6 +946,10 @@ func (r *Runner) appendTagsToCreatePoolParams(param params.CreatePoolParams) (pa
 	_, ok := r.providers[param.ProviderName]
 	if !ok {
 		return params.CreatePoolParams{}, runnerErrors.NewBadRequestError("no such provider %s", param.ProviderName)
+	}
+
+	if garmUtil.ProviderNeedsDisableUpdatesDefault(param.ProviderName) {
+		param.ExtraSpecs = garmUtil.WithDisableUpdatesExtraSpec(context.Background(), param.ExtraSpecs)
 	}
 
 	return param, nil

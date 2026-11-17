@@ -1095,6 +1095,9 @@ func (r *basePoolManager) addInstanceToProvider(instance params.Instance) error 
 		// updates. cloud-init skips both the index download and the upgrade.
 		UserDataOptions: commonParams.UserDataOptions{DisableUpdatesOnBoot: true},
 	}
+	if garmUtil.ProviderNeedsDisableUpdatesDefault(pool.ProviderName) {
+		bootstrapArgs = garmUtil.MaybeAddDisableUpdatesToExtraSpecs(r.ctx, bootstrapArgs)
+	}
 	// We use the template management system unless:
 	//   * there is no template associated with the pool/scale set
 	//   * user explicitly overwrites the install template via extra specs

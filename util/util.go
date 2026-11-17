@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/h2non/filetype"
@@ -159,6 +160,46 @@ func MaybeAddWrapperToExtraSpecs(ctx context.Context, param commonParams.Bootstr
 	}
 
 	param.ExtraSpecs = json.RawMessage(ret)
+	return param
+}
+
+// ProviderNeedsDisableUpdatesDefault reports whether the named provider reads
+// "disable_updates" from the extra specs instead of the bootstrap options.
+func ProviderNeedsDisableUpdatesDefault(providerName string) bool {
+	return strings.Contains(strings.ToLower(providerName), "lxd")
+}
+
+// WithDisableUpdatesExtraSpec returns the extra specs with "disable_updates"
+// set to true. If the key is already present, the user's value wins and the
+// specs are returned unchanged.
+func WithDisableUpdatesExtraSpec(ctx context.Context, specs json.RawMessage) json.RawMessage {
+	data := map[string]any{}
+	if len(specs) > 0 {
+		if err := json.Unmarshal(specs, &data); err != nil {
+			slog.WarnContext(ctx, "failed to unmarshal extra specs", "error", err)
+			return specs
+		}
+	}
+
+	if _, ok := data["disable_updates"]; ok {
+		// Keep the value the user set.
+		return specs
+	}
+
+	data["disable_updates"] = true
+	ret, err := json.Marshal(data)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to marshal extra specs", "error", err)
+		return specs
+	}
+
+	return json.RawMessage(ret)
+}
+
+// MaybeAddDisableUpdatesToExtraSpecs sets "disable_updates": true in the extra
+// specs unless the user already set the key.
+func MaybeAddDisableUpdatesToExtraSpecs(ctx context.Context, param commonParams.BootstrapInstance) commonParams.BootstrapInstance {
+	param.ExtraSpecs = WithDisableUpdatesExtraSpec(ctx, param.ExtraSpecs)
 	return param
 }
 

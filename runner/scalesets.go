@@ -23,6 +23,7 @@ import (
 	runnerErrors "github.com/cloudbase/garm-provider-common/errors"
 	"github.com/cloudbase/garm/auth"
 	"github.com/cloudbase/garm/params"
+	garmUtil "github.com/cloudbase/garm/util"
 	"github.com/cloudbase/garm/util/appdefaults"
 	"github.com/cloudbase/garm/util/github"
 	"github.com/cloudbase/garm/util/github/scalesets"
@@ -234,6 +235,10 @@ func (r *Runner) CreateEntityScaleSet(ctx context.Context, entityType params.For
 	}
 
 	param.TemplateID = &template.ID
+
+	if garmUtil.ProviderNeedsDisableUpdatesDefault(param.ProviderName) {
+		param.ExtraSpecs = garmUtil.WithDisableUpdatesExtraSpec(ctx, param.ExtraSpecs)
+	}
 
 	ghCli, err := github.Client(ctx, entity)
 	if err != nil {

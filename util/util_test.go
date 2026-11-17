@@ -15,7 +15,11 @@
 package util
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
+
+	commonParams "github.com/cloudbase/garm-provider-common/params"
 )
 
 func TestASCIIEqualFold(t *testing.T) {
@@ -391,4 +395,119 @@ func FuzzASCIIEqualFold(f *testing.F) {
 			t.Errorf("identical strings should match: %q", s1)
 		}
 	})
+}
+
+func TestMaybeAddDisableUpdatesToExtraSpecs(t *testing.T) {
+	tests := []struct {
+		name     string
+		specs    string
+		expected map[string]any
+	}{
+		{
+			name:     "empty specs get the key",
+			specs:    "",
+			expected: map[string]any{"disable_updates": true},
+		},
+		{
+			name:     "existing keys are kept",
+			specs:    `{"enable_boot_debug": true}`,
+			expected: map[string]any{"enable_boot_debug": true, "disable_updates": true},
+		},
+		{
+			name:     "explicit user value wins",
+			specs:    `{"disable_updates": false}`,
+			expected: map[string]any{"disable_updates": false},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			param := commonParams.BootstrapInstance{}
+			if tc.specs != "" {
+				param.ExtraSpecs = []byte(tc.specs)
+			}
+
+			got := MaybeAddDisableUpdatesToExtraSpecs(context.Background(), param)
+			var decoded map[string]any
+			if err := json.Unmarshal(got.ExtraSpecs, &decoded); err != nil {
+				t.Fatalf("result is not valid json: %v", err)
+			}
+			if len(decoded) != len(tc.expected) {
+				t.Fatalf("got %v, want %v", decoded, tc.expected)
+			}
+			for k, v := range tc.expected {
+				if decoded[k] != v {
+					t.Fatalf("key %q: got %v, want %v", k, decoded[k], v)
+				}
+			}
+		})
+	}
+
+	t.Run("invalid json is left untouched", func(t *testing.T) {
+		param := commonParams.BootstrapInstance{ExtraSpecs: []byte("{not json")}
+		got := MaybeAddDisableUpdatesToExtraSpecs(context.Background(), param)
+		if string(got.ExtraSpecs) != "{not json" {
+			t.Fatalf("extra specs changed: %s", got.ExtraSpecs)
+		}
+	})
+}
+
+func TestWithDisableUpdatesExtraSpec(t *testing.T) {
+	t.Run("nil specs become an object with the key", func(t *testing.T) {
+		got := WithDisableUpdatesExtraSpec(context.Background(), nil)
+		if string(got) != `{"disable_updates":true}` {
+			t.Fatalf("unexpected specs: %s", got)
+		}
+	})
+
+	t.Run("existing keys are kept", func(t *testing.T) {
+		got := WithDisableUpdatesExtraSpec(context.Background(), []byte(`{"extra_packages":["jq"]}`))
+		var decoded map[string]any
+		if err := json.Unmarshal(got, &decoded); err != nil {
+			t.Fatalf("result is not valid json: %v", err)
+		}
+		if decoded["disable_updates"] != true {
+			t.Fatalf("disable_updates not set: %v", decoded)
+		}
+		if _, ok := decoded["extra_packages"]; !ok {
+			t.Fatalf("extra_packages dropped: %v", decoded)
+		}
+	})
+
+	t.Run("explicit user value wins", func(t *testing.T) {
+		specs := []byte(`{"disable_updates": false}`)
+		got := WithDisableUpdatesExtraSpec(context.Background(), specs)
+		if string(got) != string(specs) {
+			t.Fatalf("specs changed: %s", got)
+		}
+	})
+
+	t.Run("invalid json is returned unchanged", func(t *testing.T) {
+		specs := []byte("{not json")
+		got := WithDisableUpdatesExtraSpec(context.Background(), specs)
+		if string(got) != string(specs) {
+			t.Fatalf("specs changed: %s", got)
+		}
+	})
+}
+
+func TestProviderNeedsDisableUpdatesDefault(t *testing.T) {
+	tests := []struct {
+		provider string
+		expected bool
+	}{
+		{provider: "lxd", expected: true},
+		{provider: "garm-provider-lxd", expected: true},
+		{provider: "LXD", expected: true},
+		{provider: "incus", expected: false},
+		{provider: "", expected: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.provider, func(t *testing.T) {
+			if got := ProviderNeedsDisableUpdatesDefault(tc.provider); got != tc.expected {
+				t.Fatalf("got %v, want %v", got, tc.expected)
+			}
+		})
+	}
 }
