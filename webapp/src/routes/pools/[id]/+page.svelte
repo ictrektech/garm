@@ -31,8 +31,37 @@
 	let recycleError = '';
 	let recycleTimer: ReturnType<typeof setInterval> | null = null;
 	let showRecycleConfirm = false;
+	let changedConfigFields: string[] = [];
 
 	$: recycling = recycleTask?.state === 'pending' || recycleTask?.state === 'running';
+
+	// Configuration that is baked into an instance at creation time. Changing any
+	// of these only takes effect on instances created afterwards.
+	const REBUILD_FIELDS: Array<{ key: keyof UpdatePoolParams; label: string }> = [
+		{ key: 'image', label: 'Image' },
+		{ key: 'template_id', label: 'Runner template' },
+		{ key: 'os_type', label: 'OS type' },
+		{ key: 'os_arch', label: 'OS architecture' },
+		{ key: 'extra_specs', label: 'Extra specs' },
+		{ key: 'enable_shell', label: 'Shell access' },
+		{ key: 'tags', label: 'Tags' },
+		{ key: 'github-runner-group', label: 'GitHub runner group' },
+		{ key: 'runner_prefix', label: 'Runner prefix' }
+	];
+
+	function describeConfigChanges(params: UpdatePoolParams): string[] {
+		return REBUILD_FIELDS.filter(({ key }) => params[key] !== undefined).map(({ label }) => label);
+	}
+
+	$: idleInstanceCount = (pool?.instances || []).filter(
+		(inst) => inst.status === 'running' && inst.runner_status === 'idle'
+	).length;
+
+	// With no idle runners the pool never recreates a deleted instance, so a
+	// rebuild would permanently remove capacity instead of replacing it.
+	$: keepsIdleRunners = (pool?.min_idle_runners ?? 0) > 0;
+
+	$: canRebuild = keepsIdleRunners && idleInstanceCount > 0;
 
 	$: poolId = page.params.id;
 
@@ -63,13 +92,8 @@
 			pool = updatedPool;
 			showUpdateModal = false;
 
-			const launchConfigChanged =
-				params.image !== undefined ||
-				params.os_type !== undefined ||
-				params.os_arch !== undefined ||
-				params.template_id !== undefined ||
-				params.extra_specs !== undefined;
-			showRecycleConfirm = launchConfigChanged;
+			changedConfigFields = describeConfigChanges(params);
+			showRecycleConfirm = changedConfigFields.length > 0;
 
 			toastStore.success(
 				'Pool Updated',
@@ -190,7 +214,8 @@
 	}
 
 	async function startRecycle() {
-		if (!pool?.id) return;
+		// Rebuilding without idle runners would remove capacity instead of replacing it.
+		if (!pool?.id || !canRebuild || recycling) return;
 
 		recycleError = '';
 		try {
@@ -461,24 +486,40 @@
 			<div class="bg-white dark:bg-gray-800 shadow rounded-lg">
 				<div class="px-4 py-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<h2 class="text-lg font-medium text-gray-900 dark:text-white">Replace instances</h2>
+						<h2 class="text-lg font-medium text-gray-900 dark:text-white">Rebuild instances</h2>
 						<p class="text-sm text-gray-500 dark:text-gray-400">
-							Deletes idle instances one at a time. The pool recreates them with the current image and template.
+							Configuration changes apply to new instances only. Rebuilding deletes one idle instance
+							at a time so the pool recreates it with the current configuration.
+						</p>
+						<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+							{#if !keepsIdleRunners}
+								This pool keeps no idle runners (Min Idle Runners is 0). Rebuild it after raising Min Idle Runners,
+								otherwise the deleted instances are not recreated.
+							{:else if idleInstanceCount === 0}
+								No idle instances right now. Running instances keep the previous configuration until they
+								can be rebuilt.
+							{:else}
+								{idleInstanceCount} idle {idleInstanceCount === 1 ? 'instance' : 'instances'} can be rebuilt now.
+							{/if}
 						</p>
 					</div>
 					<button
 						type="button"
 						on:click={startRecycle}
-						disabled={recycling}
+						disabled={recycling || !canRebuild}
 						class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						{recycling ? 'Replacing…' : 'Replace idle instances'}
+						{recycling
+							? 'Rebuilding…'
+							: idleInstanceCount > 0
+								? `Rebuild ${idleInstanceCount} idle ${idleInstanceCount === 1 ? 'instance' : 'instances'}`
+								: 'Rebuild idle instances'}
 					</button>
 				</div>
 
 				{#if recycleTask}
 					<div class="px-4 pb-5 sm:px-6 text-sm text-gray-700 dark:text-gray-300">
-						{recycleTask.replaced} of {recycleTask.total} replaced
+						{recycleTask.replaced} of {recycleTask.total} rebuilt
 						{#if recycleTask.failed > 0}
 							· {recycleTask.failed} failed
 						{/if}
@@ -511,13 +552,36 @@
 	<Modal on:close={() => showRecycleConfirm = false}>
 		<div class="max-w-lg w-full">
 			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Configuration changed</h2>
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+					New configuration applies to new instances only
+				</h2>
 			</div>
-			<div class="px-6 py-4">
+			<div class="px-6 py-4 space-y-3">
+				{#if changedConfigFields.length > 0}
+					<p class="text-sm text-gray-700 dark:text-gray-300">
+						Changed: <span class="font-medium">{changedConfigFields.join(', ')}</span>.
+					</p>
+				{/if}
 				<p class="text-sm text-gray-700 dark:text-gray-300">
-					Existing instances keep the previous image and template. Replace the idle instances now?
-					Running instances are not affected.
+					Existing instances keep their previous configuration. Rebuilding deletes an idle instance so the
+					pool recreates it with the new one.
 				</p>
+				{#if !keepsIdleRunners}
+					<p class="text-sm text-yellow-700 dark:text-yellow-400">
+						This pool keeps no idle runners (Min Idle Runners is 0), so rebuilt instances are not recreated.
+						Raise Min Idle Runners first, then rebuild from the Rebuild instances section.
+					</p>
+				{:else if idleInstanceCount === 0}
+					<p class="text-sm text-yellow-700 dark:text-yellow-400">
+						There are no idle instances right now. Running instances are left untouched and keep the
+						previous configuration; rebuild them later from the Rebuild instances section.
+					</p>
+				{:else}
+					<p class="text-sm text-gray-500 dark:text-gray-400">
+						{idleInstanceCount} idle {idleInstanceCount === 1 ? 'instance' : 'instances'} can be rebuilt.
+						Running instances are left untouched and keep the previous configuration.
+					</p>
+				{/if}
 			</div>
 			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
 				<button
@@ -525,14 +589,17 @@
 					on:click={() => showRecycleConfirm = false}
 					class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
 				>
-					Not now
+					Keep existing instances
 				</button>
 				<button
 					type="button"
 					on:click={confirmRecycle}
-					class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+					disabled={!canRebuild}
+					class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
 				>
-					Replace idle instances
+					{canRebuild
+						? `Rebuild ${idleInstanceCount} idle ${idleInstanceCount === 1 ? 'instance' : 'instances'}`
+						: 'Rebuild idle instances'}
 				</button>
 			</div>
 		</div>
