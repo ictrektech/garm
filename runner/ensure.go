@@ -173,7 +173,12 @@ func (r *Runner) ensurePool(ctx context.Context, entity params.ForgeEntity, para
 		return pools[0].ID, false, nil
 	}
 
-	poolParams := r.vosPoolParams(param, entity.EntityType)
+	arch, err := r.vosArch(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	poolParams := r.vosPoolParams(param, entity.EntityType, arch)
 	var pool params.Pool
 	if entity.EntityType == params.ForgeEntityTypeOrganization {
 		pool, err = r.CreateOrgPool(ctx, entity.ID, poolParams)
@@ -270,8 +275,9 @@ func (r *Runner) vosGiteaCredentials(ctx context.Context) (params.ForgeCredentia
 // vosPoolParams returns the pool defaults of a VOS device. The provider comes
 // from the configuration; the rest matches the image shipped with the device.
 // shortcut: the image and flavor are fixed; edit the pool in GARM when the
-// device ships another image.
-func (r *Runner) vosPoolParams(param params.EnsureEntityParams, entityType params.ForgeEntityType) params.CreatePoolParams {
+// device ships another image. The architecture comes from the caller because it
+// is resolved with a network call, see vosArch.
+func (r *Runner) vosPoolParams(param params.EnsureEntityParams, entityType params.ForgeEntityType, arch commonParams.OSArch) params.CreatePoolParams {
 	providerName := "lxd"
 	if len(r.config.Providers) > 0 && r.config.Providers[0].Name != "" {
 		providerName = r.config.Providers[0].Name
@@ -292,7 +298,7 @@ func (r *Runner) vosPoolParams(param params.EnsureEntityParams, entityType param
 		Image:                  "ubuntu:22.04",
 		Flavor:                 "default",
 		OSType:                 commonParams.Linux,
-		OSArch:                 commonParams.Amd64,
+		OSArch:                 arch,
 		Tags:                   param.Labels,
 		Enabled:                true,
 		RunnerBootstrapTimeout: 20,

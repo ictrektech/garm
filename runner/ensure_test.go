@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	commonParams "github.com/cloudbase/garm-provider-common/params"
+
 	"github.com/cloudbase/garm/config"
 	"github.com/cloudbase/garm/params"
 )
@@ -11,7 +13,7 @@ import (
 func TestVOSPoolParams(t *testing.T) {
 	r := &Runner{ctx: context.Background(), config: config.Config{Providers: []config.Provider{{Name: "lxd"}}}}
 
-	got := r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"garm-pools"}}, params.ForgeEntityTypeRepository)
+	got := r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"garm-pools"}}, params.ForgeEntityTypeRepository, commonParams.Arm64)
 	if got.ProviderName != "lxd" {
 		t.Fatalf("ProviderName = %q, want lxd", got.ProviderName)
 	}
@@ -24,13 +26,16 @@ func TestVOSPoolParams(t *testing.T) {
 	if len(got.Tags) != 1 || got.Tags[0] != "garm-pools" {
 		t.Fatalf("Tags = %v, want [garm-pools]", got.Tags)
 	}
+	if got.OSArch != commonParams.Arm64 {
+		t.Fatalf("OSArch = %q, want the architecture of the device", got.OSArch)
+	}
 
-	got = r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"linux"}, MaxRunners: 3}, params.ForgeEntityTypeRepository)
+	got = r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"linux"}, MaxRunners: 3}, params.ForgeEntityTypeRepository, commonParams.Amd64)
 	if got.MaxRunners != 3 {
 		t.Fatalf("MaxRunners = %d, want 3", got.MaxRunners)
 	}
 
-	orgPool := r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"garm-pools"}}, params.ForgeEntityTypeOrganization)
+	orgPool := r.vosPoolParams(params.EnsureEntityParams{Labels: []string{"garm-pools"}}, params.ForgeEntityTypeOrganization, commonParams.Amd64)
 	if orgPool.MaxRunners != 5 {
 		t.Fatalf("organization MaxRunners = %d, want 5", orgPool.MaxRunners)
 	}
@@ -39,7 +44,7 @@ func TestVOSPoolParams(t *testing.T) {
 	}
 
 	r.config.Providers = nil
-	if got := r.vosPoolParams(params.EnsureEntityParams{}, params.ForgeEntityTypeRepository); got.ProviderName != "lxd" {
+	if got := r.vosPoolParams(params.EnsureEntityParams{}, params.ForgeEntityTypeRepository, commonParams.Amd64); got.ProviderName != "lxd" {
 		t.Fatalf("ProviderName = %q, want the lxd fallback", got.ProviderName)
 	}
 }
