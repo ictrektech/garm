@@ -173,7 +173,7 @@ func (r *Runner) ensurePool(ctx context.Context, entity params.ForgeEntity, para
 		return pools[0].ID, false, nil
 	}
 
-	poolParams := r.vosPoolParams(param)
+	poolParams := r.vosPoolParams(param, entity.EntityType)
 	var pool params.Pool
 	if entity.EntityType == params.ForgeEntityTypeOrganization {
 		pool, err = r.CreateOrgPool(ctx, entity.ID, poolParams)
@@ -271,19 +271,24 @@ func (r *Runner) vosGiteaCredentials(ctx context.Context) (params.ForgeCredentia
 // from the configuration; the rest matches the image shipped with the device.
 // shortcut: the image and flavor are fixed; edit the pool in GARM when the
 // device ships another image.
-func (r *Runner) vosPoolParams(param params.EnsureEntityParams) params.CreatePoolParams {
+func (r *Runner) vosPoolParams(param params.EnsureEntityParams, entityType params.ForgeEntityType) params.CreatePoolParams {
 	providerName := "lxd"
 	if len(r.config.Providers) > 0 && r.config.Providers[0].Name != "" {
 		providerName = r.config.Providers[0].Name
 	}
 	maxRunners := param.MaxRunners
+	minIdleRunners := uint(0)
+	if entityType == params.ForgeEntityTypeOrganization {
+		maxRunners = 5
+		minIdleRunners = 1
+	}
 	if maxRunners == 0 {
 		maxRunners = 2
 	}
 	return params.CreatePoolParams{
 		ProviderName:           providerName,
 		MaxRunners:             maxRunners,
-		MinIdleRunners:         0,
+		MinIdleRunners:         minIdleRunners,
 		Image:                  "ubuntu:22.04",
 		Flavor:                 "default",
 		OSType:                 commonParams.Linux,
