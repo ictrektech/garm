@@ -27,7 +27,7 @@
 	let editorContainer: HTMLElement;
 	
 	// Theme management
-	$: isDarkMode = $themeStore;
+	$: isDarkMode = $themeStore.isDark;
 
 	// Get theme extensions
 	function getThemeExtensions(darkMode: boolean) {

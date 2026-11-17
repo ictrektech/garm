@@ -5,36 +5,18 @@
 	import { auth, authStore } from '$lib/stores/auth.js';
 	import Button from '$lib/components/Button.svelte';
 	import { extractAPIError } from '$lib/utils/apiError';
+	import { themeStore } from '$lib/stores/theme.js';
 
 	let username = '';
 	let password = '';
 	let loading = false;
 	let error = '';
 
-	// Initialize theme on mount
+	// themeStore.init() is idempotent: what +layout.svelte already did, this
+	// repeats only when the page is rendered outside the app layout.
 	onMount(() => {
-		initializeTheme();
+		themeStore.init();
 	});
-
-	function initializeTheme() {
-		const savedTheme = localStorage.getItem('theme');
-		let isDark = false;
-		
-		if (savedTheme === 'dark') {
-			isDark = true;
-		} else if (savedTheme === 'light') {
-			isDark = false;
-		} else {
-			// No saved preference or 'system' - use system preference
-			isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		}
-		
-		if (isDark) {
-			document.documentElement.classList.add('dark');
-		} else {
-			document.documentElement.classList.remove('dark');
-		}
-	}
 
 	// Redirect if already authenticated
 	$: if ($authStore.isAuthenticated) {
