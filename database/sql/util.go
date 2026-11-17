@@ -611,6 +611,7 @@ func (s *sqlDatabase) updatePool(tx *gorm.DB, pool Pool, param params.UpdatePool
 
 	if param.TemplateID != nil && (pool.TemplateID == nil || *param.TemplateID != *pool.TemplateID) {
 		updates["template_id"] = param.TemplateID
+		incrementGeneration = true
 	}
 
 	if param.MinIdleRunners != nil && *param.MinIdleRunners != pool.MinIdleRunners {

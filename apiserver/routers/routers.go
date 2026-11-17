@@ -308,6 +308,9 @@ func NewAPIRouter(han *controllers.APIController, authMiddleware, initMiddleware
 	// List pool instances
 	apiRouter.Handle("/pools/{poolID}/instances/", http.HandlerFunc(han.ListPoolInstancesHandler)).Methods("GET", "OPTIONS")
 	apiRouter.Handle("/pools/{poolID}/instances", http.HandlerFunc(han.ListPoolInstancesHandler)).Methods("GET", "OPTIONS")
+	// Replace pool instances
+	apiRouter.Handle("/pools/{poolID}/recycle", http.HandlerFunc(han.RecyclePoolInstancesHandler)).Methods("POST", "OPTIONS")
+	apiRouter.Handle("/pools/{poolID}/recycle/{taskID}", http.HandlerFunc(han.GetRecycleTaskHandler)).Methods("GET", "OPTIONS")
 
 	////////////////
 	// Scale sets //

@@ -7,10 +7,12 @@
 	import { resolve } from '$app/paths';
 	import UpdatePoolModal from '$lib/components/UpdatePoolModal.svelte';
 	import DeleteModal from '$lib/components/DeleteModal.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import InstancesSection from '$lib/components/InstancesSection.svelte';
 	import DetailHeader from '$lib/components/DetailHeader.svelte';
 	import { websocketStore, type WebSocketEvent } from '$lib/stores/websocket.js';
 	import type { Instance } from '$lib/api/generated/api.js';
+	import type { RecycleTask } from '$lib/api/generated-client';
 	import { toastStore } from '$lib/stores/toast.js';
 	import { formatDate, getForgeIcon, getEntityName, getEntityType, getEntityUrl } from '$lib/utils/common.js';
 	import { extractAPIError } from '$lib/utils/apiError';
@@ -24,6 +26,13 @@
 	let showDeleteInstanceModal = false;
 	let selectedInstance: Instance | null = null;
 	let unsubscribeWebsocket: (() => void) | null = null;
+
+	let recycleTask: RecycleTask | null = null;
+	let recycleError = '';
+	let recycleTimer: ReturnType<typeof setInterval> | null = null;
+	let showRecycleConfirm = false;
+
+	$: recycling = recycleTask?.state === 'pending' || recycleTask?.state === 'running';
 
 	$: poolId = page.params.id;
 
@@ -53,6 +62,15 @@
 			// Update the local state directly instead of re-rendering
 			pool = updatedPool;
 			showUpdateModal = false;
+
+			const launchConfigChanged =
+				params.image !== undefined ||
+				params.os_type !== undefined ||
+				params.os_arch !== undefined ||
+				params.template_id !== undefined ||
+				params.extra_specs !== undefined;
+			showRecycleConfirm = launchConfigChanged;
+
 			toastStore.success(
 				'Pool Updated',
 				`Pool ${pool.id} has been updated successfully.`
@@ -166,6 +184,51 @@
 		pool = pool;
 	}
 
+	function confirmRecycle() {
+		showRecycleConfirm = false;
+		startRecycle();
+	}
+
+	async function startRecycle() {
+		if (!pool?.id) return;
+
+		recycleError = '';
+		try {
+			recycleTask = await garmApi.recyclePoolInstances(pool.id, { only_idle: true, concurrency: 1 });
+			pollRecycle(pool.id);
+		} catch (err) {
+			recycleError = extractAPIError(err);
+		}
+	}
+
+	function pollRecycle(poolId: string) {
+		stopRecyclePolling();
+
+		recycleTimer = setInterval(async () => {
+			if (!recycleTask) return;
+
+			try {
+				const task = await garmApi.getRecycleTask(poolId, recycleTask.id);
+				recycleTask = task;
+
+				if (task.state === 'completed' || task.state === 'failed') {
+					stopRecyclePolling();
+					await loadPool();
+				}
+			} catch (err) {
+				recycleError = extractAPIError(err);
+				stopRecyclePolling();
+			}
+		}, 2000);
+	}
+
+	function stopRecyclePolling() {
+		if (recycleTimer) {
+			clearInterval(recycleTimer);
+			recycleTimer = null;
+		}
+	}
+
 	onMount(() => {
 		loadPool();
 		
@@ -191,6 +254,7 @@
 	});
 
 	onDestroy(() => {
+		stopRecyclePolling();
 		if (unsubscribeWebsocket) {
 			unsubscribeWebsocket();
 			unsubscribeWebsocket = null;
@@ -392,6 +456,42 @@
 			</div>
 		{/if}
 
+		<!-- Instance Replacement -->
+		{#if pool.instances && pool.instances.length > 0}
+			<div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+				<div class="px-4 py-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 class="text-lg font-medium text-gray-900 dark:text-white">Replace instances</h2>
+						<p class="text-sm text-gray-500 dark:text-gray-400">
+							Deletes idle instances one at a time. The pool recreates them with the current image and template.
+						</p>
+					</div>
+					<button
+						type="button"
+						on:click={startRecycle}
+						disabled={recycling}
+						class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{recycling ? 'Replacing…' : 'Replace idle instances'}
+					</button>
+				</div>
+
+				{#if recycleTask}
+					<div class="px-4 pb-5 sm:px-6 text-sm text-gray-700 dark:text-gray-300">
+						{recycleTask.replaced} of {recycleTask.total} replaced
+						{#if recycleTask.failed > 0}
+							· {recycleTask.failed} failed
+						{/if}
+						· {recycleTask.state}
+					</div>
+				{/if}
+
+				{#if recycleError}
+					<div class="px-4 pb-5 sm:px-6 text-sm text-red-600 dark:text-red-400">{recycleError}</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Instances -->
 		<InstancesSection instances={pool.instances || []} entityType="pool" onDeleteInstance={openDeleteInstanceModal} />
 
@@ -405,6 +505,38 @@
 		on:close={() => showUpdateModal = false}
 		on:submit={(e) => handleUpdate(e.detail)}
 	/>
+{/if}
+
+{#if showRecycleConfirm}
+	<Modal on:close={() => showRecycleConfirm = false}>
+		<div class="max-w-lg w-full">
+			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Configuration changed</h2>
+			</div>
+			<div class="px-6 py-4">
+				<p class="text-sm text-gray-700 dark:text-gray-300">
+					Existing instances keep the previous image and template. Replace the idle instances now?
+					Running instances are not affected.
+				</p>
+			</div>
+			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+				<button
+					type="button"
+					on:click={() => showRecycleConfirm = false}
+					class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+				>
+					Not now
+				</button>
+				<button
+					type="button"
+					on:click={confirmRecycle}
+					class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+				>
+					Replace idle instances
+				</button>
+			</div>
+		</div>
+	</Modal>
 {/if}
 
 {#if showDeleteModal && pool}

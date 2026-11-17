@@ -1081,6 +1081,11 @@ func (r *Runner) DeleteRunner(ctx context.Context, instanceName string, forceDel
 		return runnerErrors.ErrUnauthorized
 	}
 
+	return r.deleteRunnerInternal(ctx, instanceName, forceDelete, bypassGithubUnauthorized)
+}
+
+// deleteRunnerInternal deletes a runner without checking the caller role.
+func (r *Runner) deleteRunnerInternal(ctx context.Context, instanceName string, forceDelete, bypassGithubUnauthorized bool) error {
 	instance, err := r.store.GetInstance(ctx, instanceName)
 	if err != nil {
 		return fmt.Errorf("error fetching instance: %w", err)

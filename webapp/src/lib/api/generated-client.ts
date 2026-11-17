@@ -107,6 +107,23 @@ export interface LoginResponse {
   token: string;
 }
 
+export interface RecycleTaskFailure {
+  instance: string;
+  error: string;
+}
+
+export interface RecycleTask {
+  id: string;
+  pool_id: string;
+  state: 'pending' | 'running' | 'completed' | 'failed';
+  total: number;
+  replaced: number;
+  failed: number;
+  failures?: RecycleTaskFailure[];
+  started_at: string;
+  updated_at: string;
+}
+
 export class GeneratedGarmApiClient {
   private baseUrl: string;
   private token?: string;
@@ -548,6 +565,67 @@ export class GeneratedGarmApiClient {
 
   async deletePool(id: string): Promise<void> {
     await this.poolsApi.deletePool(id);
+  }
+
+  async recyclePoolInstances(
+    id: string,
+    params: { concurrency?: number; only_idle?: boolean; instance_ids?: string[] } = {}
+  ): Promise<RecycleTask> {
+    return this.requestJSON<RecycleTask>(`/pools/${id}/recycle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+  }
+
+  async getRecycleTask(poolId: string, taskId: string): Promise<RecycleTask> {
+    return this.requestJSON<RecycleTask>(`/pools/${poolId}/recycle/${taskId}`);
+  }
+
+  private async resolveAccessToken(): Promise<string> {
+    const token = this.config.accessToken;
+    if (!token) {
+      return '';
+    }
+    if (typeof token === 'function') {
+      return token();
+    }
+    return token;
+  }
+
+  private async requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const token = await this.resolveAccessToken();
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...((init.headers as Record<string, string>) || {})
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.config.basePath || ''}${path}`, {
+      ...init,
+      headers,
+      credentials: this.isDevelopmentMode() ? 'omit' : 'include'
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      let message = `Request failed with status ${response.status}`;
+      try {
+        const parsed = JSON.parse(body);
+        const parts = [parsed.error, parsed.details].filter((part: unknown) => typeof part === 'string' && part);
+        if (parts.length > 0) {
+          message = parts.join(': ');
+        }
+      } catch {
+        // Not a JSON error body. Keep the status message.
+      }
+      throw new Error(message);
+    }
+
+    return (await response.json()) as T;
   }
 
   // Scale Sets
