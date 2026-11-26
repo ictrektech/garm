@@ -106,12 +106,19 @@ RUN set -ex; \
         && upx /opt/garm/providers.d/$PROVIDER_NAME; \
     done
 
+# The V-Scheduler provider lives in this repository, so it is built from source.
+RUN cd /build/garm/contrib/garm-provider-vscheduler \
+    && go build -ldflags "-linkmode external -extldflags '-static' -s -w" \
+        -o /opt/garm/providers.d/garm-provider-vscheduler . \
+    && upx /opt/garm/providers.d/garm-provider-vscheduler
+
 FROM busybox
 
 COPY --from=builder /bin/garm /bin/garm
 COPY --from=builder /bin/garm-cli /bin/garm-cli
 COPY --from=builder /opt/garm/providers.d/garm-provider-lxd /opt/garm/providers.d/garm-provider-lxd
 COPY --from=builder /opt/garm/providers.d/garm-provider-incus /opt/garm/providers.d/garm-provider-incus
+COPY --from=builder /opt/garm/providers.d/garm-provider-vscheduler /opt/garm/providers.d/garm-provider-vscheduler
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 ENTRYPOINT ["/bin/garm", "-config", "/etc/garm/config.toml"]
