@@ -15,7 +15,10 @@
 package params
 
 import (
+	"slices"
 	"testing"
+
+	commonParams "github.com/cloudbase/garm-provider-common/params"
 )
 
 func TestPool_HasRequiredLabels(t *testing.T) {
@@ -157,5 +160,18 @@ func TestPool_HasRequiredLabels(t *testing.T) {
 				t.Errorf("HasRequiredLabels() = %v, expected %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestInstanceStatusTransitionsAllowRetryOfFailedInstance(t *testing.T) {
+	// retryFailedInstancesForOnePool re-queues an instance from error.
+	allowed := InstanceStatusTransitions[commonParams.InstanceError]
+	if !slices.Contains(allowed, commonParams.InstancePendingCreate) {
+		t.Fatalf("error -> pending_create must be allowed, got %v", allowed)
+	}
+	// A running instance is never re-queued for create.
+	running := InstanceStatusTransitions[commonParams.InstanceRunning]
+	if slices.Contains(running, commonParams.InstancePendingCreate) {
+		t.Fatalf("running -> pending_create must stay disallowed")
 	}
 }

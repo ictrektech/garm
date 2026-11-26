@@ -195,6 +195,9 @@ var InstanceStatusTransitions = map[commonParams.InstanceStatus][]commonParams.I
 		commonParams.InstancePendingForceDelete,
 		commonParams.InstanceStatusUnknown,
 		commonParams.InstanceDeleting,
+		// retryFailedInstancesForOnePool re-queues a failed instance as
+		// pending_create; without this the retry always fails the transition check.
+		commonParams.InstancePendingCreate,
 	},
 	commonParams.InstancePendingDelete: {
 		commonParams.InstanceDeleting,
