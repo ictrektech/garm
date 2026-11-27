@@ -1257,6 +1257,29 @@ type ProviderTargetInfo struct {
 	ImageTag        string          `json:"image_tag,omitempty"`
 }
 
+// ProviderRunnerConfig is the runner-facing part of an external provider's
+// config file. The token never leaves the server; the UI only learns whether one
+// is stored.
+type ProviderRunnerConfig struct {
+	// Supported is false for providers whose config is not JSON, for example the
+	// LXD provider. The UI hides the form when it is false.
+	Supported       bool   `json:"supported"`
+	BaseURL         string `json:"base_url,omitempty"`
+	ImageRepository string `json:"image_repository,omitempty"`
+	ImageTag        string `json:"image_tag,omitempty"`
+	TokenConfigured bool   `json:"token_configured"`
+}
+
+// UpdateProviderRunnerConfigParams carries the fields the UI can change. An
+// empty Token keeps the stored one, so the form can be saved without retyping
+// the secret.
+type UpdateProviderRunnerConfigParams struct {
+	BaseURL         string `json:"base_url"`
+	Token           string `json:"token"`
+	ImageRepository string `json:"image_repository"`
+	ImageTag        string `json:"image_tag"`
+}
+
 // swagger:model PoolManagerStatus
 type PoolManagerStatus struct {
 	IsRunning     bool   `json:"running,omitempty"`
