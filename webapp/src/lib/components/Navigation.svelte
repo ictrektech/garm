@@ -4,6 +4,7 @@
 	import { auth, authStore } from '$lib/stores/auth.js';
 	import { websocketStore } from '$lib/stores/websocket.js';
 	import { themeStore } from '$lib/stores/theme.js';
+	import { isCurrentUserAdmin } from '$lib/utils/jwt';
 
 	let mobileMenuOpen = false;
 	let userMenuOpen = false;
@@ -85,6 +86,12 @@
 			icon: 'M13 10V3L4 14h7v7l9-11h-7z'
 		},
 		{
+			href: resolve('/providers'),
+			label: 'Providers',
+			icon: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
+			adminOnly: true
+		},
+		{
 			href: resolve('/templates'),
 			label: 'Runner Install Templates',
 			icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' // Code/script icon
@@ -95,6 +102,8 @@
 			icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4'
 		}
 	];
+
+	$: visibleConfigNavItems = configNavItems.filter((item) => !item.adminOnly || isCurrentUserAdmin());
 
 	$: currentPath = $page.url.pathname;
 </script>
@@ -198,7 +207,7 @@
 
 			<!-- Configuration section -->
 			<div class="border-t border-gray-200 dark:border-gray-600 mt-4 pt-4">
-				{#each configNavItems as item}
+				{#each visibleConfigNavItems as item}
 					<a
 						href={item.href}
 						class="group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200
@@ -348,7 +357,7 @@
 
 						<!-- Configuration section -->
 						<div class="border-t border-gray-200 dark:border-gray-600 mt-4 pt-4">
-							{#each configNavItems as item}
+							{#each visibleConfigNavItems as item}
 								<a
 									href={item.href}
 									on:click={() => mobileMenuOpen = false}

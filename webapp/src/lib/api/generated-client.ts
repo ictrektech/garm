@@ -142,6 +142,24 @@ export interface ProviderTargetInfo {
   image_tag?: string;
 }
 
+// Runner-facing settings of an external provider. The token never comes back
+// from the server; token_configured only says whether one is stored.
+export interface ProviderRunnerConfig {
+  supported: boolean;
+  base_url?: string;
+  image_repository?: string;
+  image_tag?: string;
+  token_configured: boolean;
+}
+
+// Fields the provider form can change. An empty token keeps the stored one.
+export interface UpdateProviderRunnerConfigParams {
+  base_url: string;
+  token: string;
+  image_repository: string;
+  image_tag: string;
+}
+
 export class GeneratedGarmApiClient {
   private baseUrl: string;
   private token?: string;
@@ -695,6 +713,30 @@ export class GeneratedGarmApiClient {
     }
     return await this.requestJSON<ProviderTargetInfo>(
       `/providers/${encodeURIComponent(provider)}/targets`
+    );
+  }
+
+  // Runner-facing settings of one external provider. The server never returns
+  // the token, only whether one is stored.
+  async getProviderRunnerConfig(provider: string): Promise<ProviderRunnerConfig> {
+    return await this.requestJSON<ProviderRunnerConfig>(
+      `/providers/${encodeURIComponent(provider)}/runner-config`
+    );
+  }
+
+  // Store the runner settings. The provider reads the file on its next call, so
+  // no restart is needed.
+  async updateProviderRunnerConfig(
+    provider: string,
+    params: UpdateProviderRunnerConfigParams
+  ): Promise<ProviderRunnerConfig> {
+    return await this.requestJSON<ProviderRunnerConfig>(
+      `/providers/${encodeURIComponent(provider)}/runner-config`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      }
     );
   }
 

@@ -29,6 +29,8 @@ import {
 	type UpdateFileObjectParams,
 	type ProviderTarget,
 	type ProviderTargetInfo,
+	type ProviderRunnerConfig,
+	type UpdateProviderRunnerConfigParams,
 } from './generated-client.js';
 
 // Import endpoint and credentials types directly
@@ -72,6 +74,8 @@ export type {
 	UpdateFileObjectParams,
 	ProviderTarget,
 	ProviderTargetInfo,
+	ProviderRunnerConfig,
+	UpdateProviderRunnerConfigParams,
 };
 
 // Legacy APIError type for backward compatibility
