@@ -79,6 +79,52 @@ else
 	PROVIDER_STATE="无（VOS ensure 会报 no such provider lxd）"
 fi
 
+SCHEDULER_PROVIDER_BIN=/opt/garm/providers.d/garm-provider-vscheduler
+SCHEDULER_JSON="${DATA_DIR}/garm-provider-vscheduler.json"
+SCHEDULER_BASE_URL="${SCHEDULER_BASE_URL:-http://v-scheduler:38120/api/v1}"
+
+# 环境变量没给时沿用文件里的旧值。重建容器常常只带其中一个变量：只给 token
+# 会把 image_tag 清空，只给 image_tag 会被整段忽略。
+json_field() {
+	[ -f "${SCHEDULER_JSON}" ] || return 0
+	sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" "${SCHEDULER_JSON}" | head -n1
+}
+scheduler_token="${SCHEDULER_TOKEN:-$(json_field token)}"
+runner_image_tag="${GARM_RUNNER_IMAGE_TAG:-$(json_field image_tag)}"
+
+if [ -x "${SCHEDULER_PROVIDER_BIN}" ] && [ -n "${scheduler_token}" ]; then
+	# 配置落盘：只给容器内 garm 进程读
+	(
+		umask 077
+		cat >"${SCHEDULER_JSON}" <<EOF
+{
+  "base_url": "${SCHEDULER_BASE_URL}",
+  "token": "${scheduler_token}",
+  "container_port": ${SCHEDULER_CONTAINER_PORT:-8080},
+  "image_tag": "${runner_image_tag}"
+}
+EOF
+	)
+	cat >>"${DATA_DIR}/config.toml" <<EOF
+
+# 没有 provider 二进制或没有 token 时不追加，否则 garm 启动校验会因
+# config_file 不存在或 token 为空而失败。
+[[provider]]
+  name = "vscheduler"
+  provider_type = "external"
+  description = "V-Scheduler managed nodes"
+  [provider.external]
+    interface_version = "v0.1.1"
+    provider_executable = "${SCHEDULER_PROVIDER_BIN}"
+    config_file = "${SCHEDULER_JSON}"
+EOF
+	PROVIDER_STATE="${PROVIDER_STATE}；vscheduler"
+elif [ ! -x "${SCHEDULER_PROVIDER_BIN}" ]; then
+	echo "[garm-dev] vscheduler 跳过：缺少 ${SCHEDULER_PROVIDER_BIN}（先在窗主编译到 .dev-providers/）"
+else
+	echo "[garm-dev] vscheduler 跳过：没有 SCHEDULER_TOKEN，也没有 ${SCHEDULER_JSON} 里的旧 token"
+fi
+
 echo "[garm-dev] config: ${DATA_DIR}/config.toml (base_path=${BASE_PATH}, log_level=${LOG_LEVEL})"
 echo "[garm-dev] provider: ${PROVIDER_STATE}"
 

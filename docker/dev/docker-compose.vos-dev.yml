@@ -23,6 +23,13 @@ services:
       # 与已安装应用一致的 VOS 单点登录；userinfo 走设备内网网关
       GARM_VOS_AUTH_ENABLED: "true"
       GARM_VOS_USERINFO_URL: ${GARM_VOS_USERINFO_URL:-http://172.17.0.1:1182/v1000/oauth2/userinfo}
+      # V-Scheduler provider 联调。SCHEDULER_TOKEN 为空时 entrypoint 不写 provider 段。
+      SCHEDULER_BASE_URL: ${SCHEDULER_BASE_URL:-http://v-scheduler:38120/api/v1}
+      SCHEDULER_TOKEN: ${SCHEDULER_TOKEN:-}
+      SCHEDULER_CONTAINER_PORT: ${SCHEDULER_CONTAINER_PORT:-8080}
+      # garm-runner 的镜像 tag（不含架构前缀）。池的 image 只写仓库名时，
+      # provider 用它补上 amd_ 或 arm_ 前缀。与 V-Scheduler 自身的镜像无关。
+      GARM_RUNNER_IMAGE_TAG: ${GARM_RUNNER_IMAGE_TAG:-}
 
 networks:
   vos_default:
