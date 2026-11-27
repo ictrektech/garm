@@ -104,6 +104,9 @@ V-Scheduler 不传卷、不传自定义命令、只传这一个环境变量，�
 
 `image_tag` 不要带 `amd_` / `arm_` 前缀，provider 会自己加。带了会直接报错。
 
+配置里还有一个 `image_repository`，是 runner 镜像的仓库名，provider 自己不使用。
+garm 读它填池表单的 `image` 字段，并在下拉下方显示补全后的完整引用。
+
 provider 会比对池的 `os_arch` 与选中节点的架构，不一致时报错。V-Scheduler 上报
 `aarch64` / `x86_64`，provider 归一后比对。
 

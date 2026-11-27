@@ -2,7 +2,6 @@ package providertargets
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -35,69 +34,87 @@ func TestListReturnsManagedNodes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	path := writeConfig(t, `{"base_url":"`+server.URL+`","token":"secret"}`)
-	targets, err := List(context.Background(), path)
+	path := writeConfig(t, `{"base_url":"`+server.URL+`","token":"secret",`+
+		`"image_repository":"registry.example.com/ci/runner","image_tag":"v6.0.1_27ec9940"}`)
+	info, err := List(context.Background(), path)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if gotAuth != "Bearer secret" {
 		t.Errorf("authorization header = %q", gotAuth)
 	}
-	if len(targets) != 1 {
-		t.Fatalf("got %d targets, want 1", len(targets))
+	if len(info.Targets) != 1 {
+		t.Fatalf("got %d targets, want 1", len(info.Targets))
 	}
-	got := targets[0]
+	got := info.Targets[0]
 	if got.ID != "01M88Y1W" || got.Name != "thor35" || got.Profile != "jetson-thor" || got.Arch != "aarch64" {
 		t.Errorf("unexpected target: %+v", got)
 	}
+	if info.ImageRepository != "registry.example.com/ci/runner" || info.ImageTag != "v6.0.1_27ec9940" {
+		t.Errorf("image suggestion not carried over: %+v", info)
+	}
 }
 
-func TestListWithoutCredentialsIsEmpty(t *testing.T) {
-	cases := map[string]string{
-		"no keys":  `{}`,
-		"no token": `{"base_url":"http://127.0.0.1:1"}`,
+func TestListWithoutCredentialsStillSuggestsTheImage(t *testing.T) {
+	path := writeConfig(t, `{"image_repository":"registry.example.com/ci/runner","image_tag":"v1"}`)
+	info, err := List(context.Background(), path)
+	if err != nil {
+		t.Fatalf("List: %v", err)
 	}
-	for name, body := range cases {
-		t.Run(name, func(t *testing.T) {
-			targets, err := List(context.Background(), writeConfig(t, body))
-			if err != nil {
-				t.Fatalf("List: %v", err)
-			}
-			if targets != nil {
-				t.Errorf("got %v, want nil", targets)
-			}
-		})
+	if len(info.Targets) != 0 {
+		t.Errorf("got %d targets, want none", len(info.Targets))
+	}
+	if info.ImageRepository != "registry.example.com/ci/runner" {
+		t.Errorf("image repository lost: %+v", info)
 	}
 }
 
 func TestListWithEmptyConfigPathIsEmpty(t *testing.T) {
-	targets, err := List(context.Background(), "")
+	info, err := List(context.Background(), "")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if targets != nil {
-		t.Errorf("got %v, want nil", targets)
+	if len(info.Targets) != 0 || info.ImageRepository != "" || info.ImageTag != "" {
+		t.Errorf("got %+v, want an empty answer", info)
 	}
 }
 
-func TestListReportsBadConfig(t *testing.T) {
-	if _, err := List(context.Background(), writeConfig(t, `not json`)); err == nil {
-		t.Error("expected an error for a malformed config")
+func TestListTreatsNonJSONConfigAsNoTargets(t *testing.T) {
+	// The LXD provider uses a TOML config. Decoding it must not fail: the pool
+	// form asks every provider for targets.
+	info, err := List(context.Background(), writeConfig(t, "provider_executable = \"/opt/x\"\n"))
+	if err != nil {
+		t.Fatalf("List: %v", err)
 	}
-	if _, err := List(context.Background(), filepath.Join(t.TempDir(), "missing.json")); err == nil {
-		t.Error("expected an error for a missing config file")
+	if len(info.Targets) != 0 {
+		t.Errorf("got %+v, want an empty answer", info)
 	}
 }
 
-func TestListReportsRejectedRequest(t *testing.T) {
+func TestListTreatsMissingConfigAsEmpty(t *testing.T) {
+	info, err := List(context.Background(), filepath.Join(t.TempDir(), "missing.json"))
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(info.Targets) != 0 {
+		t.Errorf("got %+v, want an empty answer", info)
+	}
+}
+
+func TestListKeepsImageSuggestionWhenTheNodeListFails(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer server.Close()
 
-	path := writeConfig(t, `{"base_url":"`+server.URL+`","token":"bad"}`)
-	if _, err := List(context.Background(), path); err == nil {
+	path := writeConfig(t, `{"base_url":"`+server.URL+`","token":"bad",`+
+		`"image_repository":"registry.example.com/ci/runner"}`)
+	info, err := List(context.Background(), path)
+	if err == nil {
 		t.Error("expected an error for a 401 answer")
+	}
+	if info.ImageRepository != "registry.example.com/ci/runner" {
+		t.Errorf("image repository lost on error: %+v", info)
 	}
 }
 
@@ -112,23 +129,14 @@ func TestListReportsUnreachableServer(t *testing.T) {
 	}
 }
 
-func TestListSendsConfiguredTimeout(t *testing.T) {
-	// A config without timeout_seconds must still work; a numeric one must be
-	// accepted without breaking parsing.
-	var got struct {
-		BaseURL string `json:"base_url"`
-		Token   string `json:"token"`
-	}
+func TestListAcceptsATimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"items":[]}`))
+		_, _ = w.Write([]byte(`{"code":"OK","data":{"items":[]}}`))
 	}))
 	defer server.Close()
 
-	body, _ := json.Marshal(map[string]any{"base_url": server.URL, "token": "t", "timeout_seconds": 3})
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if _, err := List(context.Background(), writeConfig(t, string(body))); err != nil {
+	path := writeConfig(t, `{"base_url":"`+server.URL+`","token":"t","timeout_seconds":3}`)
+	if _, err := List(context.Background(), path); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 }

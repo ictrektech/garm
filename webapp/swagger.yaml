@@ -3815,14 +3815,13 @@ paths:
     /providers/{providerName}/targets:
         get:
             description: |-
-                List the compute targets an external provider can deploy to. An empty list
-                means the provider does not publish one, or it is currently unreachable.
+                List the compute targets an external provider can deploy to, plus the runner
+                image it expects. An empty target list means the provider does not publish one,
+                or it is currently unreachable.
             operationId: ListProviderTargets
             responses:
                 "200":
-                    description: ProviderTargets
-                    schema:
-                        $ref: '#/definitions/ProviderTargets'
+                    $ref: '#/responses/ProviderTargetInfo'
                 "400":
                     description: APIErrorResponse
                     schema:

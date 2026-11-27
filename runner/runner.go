@@ -373,11 +373,12 @@ func (r *Runner) ListProviders(ctx context.Context) ([]params.Provider, error) {
 	return ret, nil
 }
 
-// ListProviderTargets returns the compute targets an external provider can
-// deploy to. Providers that do not publish a target list return an empty slice.
-func (r *Runner) ListProviderTargets(ctx context.Context, providerName string) (params.ProviderTargets, error) {
+// ListProviderTargets describes the compute targets an external provider can
+// deploy to, plus the runner image it expects. Providers that do not publish a
+// target list return an empty answer.
+func (r *Runner) ListProviderTargets(ctx context.Context, providerName string) (params.ProviderTargetInfo, error) {
 	if !auth.IsAdmin(ctx) {
-		return nil, runnerErrors.ErrUnauthorized
+		return params.ProviderTargetInfo{}, runnerErrors.ErrUnauthorized
 	}
 
 	for _, prov := range r.config.Providers {
@@ -385,11 +386,11 @@ func (r *Runner) ListProviderTargets(ctx context.Context, providerName string) (
 			continue
 		}
 		if prov.ProviderType != params.ExternalProvider {
-			return params.ProviderTargets{}, nil
+			return params.ProviderTargetInfo{}, nil
 		}
 		return providertargets.List(ctx, prov.External.ConfigFile)
 	}
-	return nil, fmt.Errorf("provider %q is not configured", providerName)
+	return params.ProviderTargetInfo{}, fmt.Errorf("provider %q is not configured", providerName)
 }
 
 func (r *Runner) loadReposOrgsAndEnterprises() {

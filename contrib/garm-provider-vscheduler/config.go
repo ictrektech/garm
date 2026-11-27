@@ -26,6 +26,9 @@ type config struct {
 	// with amd_ or arm_ from the pool os_arch, so one value serves both
 	// architectures.
 	ImageTag string `json:"image_tag"`
+	// ImageRepository is the runner image repository without a tag. GARM reads it
+	// to suggest a pool image in the web UI; the provider never uses it.
+	ImageRepository string `json:"image_repository"`
 }
 
 func loadConfig(path string) (config, error) {

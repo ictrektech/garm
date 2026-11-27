@@ -114,6 +114,13 @@ definitions:
         import:
             package: github.com/cloudbase/garm/params
             alias: garm_params
+  ProviderTargetInfo:
+    type: object
+    x-go-type:
+        type: ProviderTargetInfo
+        import:
+            package: github.com/cloudbase/garm/params
+            alias: garm_params
   Instances:
     type: array
     x-go-type:

@@ -18,37 +18,60 @@ import (
 const defaultTimeout = 10 * time.Second
 
 // vschedulerConfig is the subset of the V-Scheduler provider config needed to
-// list nodes. Providers with a different config format have neither key and
-// yield an empty list, which makes the UI hide the picker.
+// describe a provider to the pool form. Providers with a different config format
+// have none of these keys and yield an empty answer, which makes the UI hide the
+// picker.
 //
 // The provider itself reads the same /managed-nodes answer with its own struct
 // (contrib/garm-provider-vscheduler/vscheduler.go, type node). Change both when
 // that shape changes.
 type vschedulerConfig struct {
-	BaseURL string `json:"base_url"`
-	Token   string `json:"token"`
-	Timeout int    `json:"timeout_seconds"`
+	BaseURL         string `json:"base_url"`
+	Token           string `json:"token"`
+	Timeout         int    `json:"timeout_seconds"`
+	ImageRepository string `json:"image_repository"`
+	ImageTag        string `json:"image_tag"`
 }
 
-// List returns the deployment targets described by an external provider config
-// file. An empty result and a nil error mean the provider has no target list to
-// offer.
-func List(ctx context.Context, configFile string) (params.ProviderTargets, error) {
+// List describes the deployment targets of an external provider, plus the runner
+// image repository and tag it expects. A missing config file or a provider with a
+// different config format yields an empty answer and no error.
+func List(ctx context.Context, configFile string) (params.ProviderTargetInfo, error) {
 	if configFile == "" {
-		return nil, nil
+		return params.ProviderTargetInfo{}, nil
 	}
 	raw, err := os.ReadFile(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("reading provider config: %w", err)
+		if os.IsNotExist(err) {
+			return params.ProviderTargetInfo{}, nil
+		}
+		return params.ProviderTargetInfo{}, fmt.Errorf("reading provider config: %w", err)
 	}
 	var cfg vschedulerConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing provider config: %w", err)
+		// Providers with a non-JSON config (for example the LXD provider's TOML)
+		// simply have no target list. Reporting that as an error would put a
+		// warning in the log every time someone opens the pool form.
+		return params.ProviderTargetInfo{}, nil
+	}
+
+	info := params.ProviderTargetInfo{
+		Targets:         params.ProviderTargets{},
+		ImageRepository: cfg.ImageRepository,
+		ImageTag:        cfg.ImageTag,
 	}
 	if cfg.BaseURL == "" || cfg.Token == "" {
-		return nil, nil
+		return info, nil
 	}
-	return listVschedulerNodes(ctx, cfg)
+
+	targets, err := listVschedulerNodes(ctx, cfg)
+	if err != nil {
+		// Keep the image fields: they are useful even when the node list is not
+		// reachable. The controller logs the error and answers with empty targets.
+		return info, err
+	}
+	info.Targets = targets
+	return info, nil
 }
 
 func listVschedulerNodes(ctx context.Context, cfg vschedulerConfig) (params.ProviderTargets, error) {

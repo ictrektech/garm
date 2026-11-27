@@ -1249,6 +1249,14 @@ type ProviderTarget struct {
 // swagger:model ProviderTargets
 type ProviderTargets []ProviderTarget
 
+// ProviderTargetInfo describes a provider's deployment targets together with the
+// runner image it expects. The web UI uses it to fill the pool form.
+type ProviderTargetInfo struct {
+	Targets         ProviderTargets `json:"targets"`
+	ImageRepository string          `json:"image_repository,omitempty"`
+	ImageTag        string          `json:"image_tag,omitempty"`
+}
+
 // swagger:model PoolManagerStatus
 type PoolManagerStatus struct {
 	IsRunning     bool   `json:"running,omitempty"`
