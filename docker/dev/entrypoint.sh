@@ -91,6 +91,9 @@ json_field() {
 }
 scheduler_token="${SCHEDULER_TOKEN:-$(json_field token)}"
 runner_image_tag="${GARM_RUNNER_IMAGE_TAG:-$(json_field image_tag)}"
+# 池表单的 image 可以直接用这个仓库名，provider 会按池架构补 tag。
+runner_image_repo="${GARM_RUNNER_IMAGE_REPO:-$(json_field image_repository)}"
+runner_image_repo="${runner_image_repo:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm-runner}"
 
 if [ -x "${SCHEDULER_PROVIDER_BIN}" ] && [ -n "${scheduler_token}" ]; then
 	# 配置落盘：只给容器内 garm 进程读
@@ -101,7 +104,8 @@ if [ -x "${SCHEDULER_PROVIDER_BIN}" ] && [ -n "${scheduler_token}" ]; then
   "base_url": "${SCHEDULER_BASE_URL}",
   "token": "${scheduler_token}",
   "container_port": ${SCHEDULER_CONTAINER_PORT:-8080},
-  "image_tag": "${runner_image_tag}"
+  "image_tag": "${runner_image_tag}",
+  "image_repository": "${runner_image_repo}"
 }
 EOF
 	)

@@ -30,6 +30,8 @@ services:
       # garm-runner 的镜像 tag（不含架构前缀）。池的 image 只写仓库名时，
       # provider 用它补上 amd_ 或 arm_ 前缀。与 V-Scheduler 自身的镜像无关。
       GARM_RUNNER_IMAGE_TAG: ${GARM_RUNNER_IMAGE_TAG:-}
+      # 池表单 image 字段的默认仓库名。provider 按池架构补 amd_ / arm_ 标签。
+      GARM_RUNNER_IMAGE_REPO: ${GARM_RUNNER_IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm-runner}
 
 networks:
   vos_default:
