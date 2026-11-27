@@ -143,6 +143,7 @@ garm 的 `GET /api/v1/providers/{provider}/targets`，garm 读本 provider 的�
 `base_url` 与 `token`，再去 V-Scheduler 拉 `/managed-nodes`。
 
 - 选项分两组：按 Profile（交给 V-Scheduler 按负载选节点）和具体节点（`target_id`，钉死一台）。
+- provider 配置里有 `image_repository` 时，`image` 为空会自动填上仓库名，下拉下方显示实际使用的完整 tag。只填空值，不覆盖手填的内容。
 - 选具体节点时会把池的 `os_arch` 一起改成该节点架构，避免架构不匹配。
 - 选中结果写进 `extra_specs`，JSON 编辑器里仍可手改。
 - V-Scheduler 不可达或该 provider 没有节点清单时，下拉不显示，表单退回手写 `extra_specs`。

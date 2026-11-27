@@ -430,6 +430,7 @@
 					<!-- Deployment target, when the provider publishes one -->
 					<ProviderTargetPicker
 						provider={selectedProvider}
+						bind:image
 						bind:extraSpecs
 						bind:osArch
 					/>

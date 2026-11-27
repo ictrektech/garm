@@ -7,14 +7,26 @@
 	export let provider: string;
 	export let extraSpecs: string;
 	export let osArch: string = 'amd64';
+	// The pool image field. Left alone when it already has a value.
+	export let image: string = '';
 
 	let targets: ProviderTarget[] = [];
 	let loading = false;
 	let loadedFor = '';
+	let imageRepository = '';
+	let imageTag = '';
+	// What this component put into the image field, so it can take it back.
+	let filledImage = '';
 
 	$: if (!provider) {
 		targets = [];
 		loadedFor = '';
+		imageRepository = '';
+		imageTag = '';
+		if (filledImage !== '' && image === filledImage) {
+			image = '';
+		}
+		filledImage = '';
 	} else if (provider !== loadedFor) {
 		loadedFor = provider;
 		void load(provider);
@@ -24,15 +36,30 @@
 		loading = true;
 		targets = [];
 		try {
-			const result = await garmApi.listProviderTargets(name);
+			const info = await garmApi.listProviderTargets(name);
 			if (name === loadedFor) {
-				targets = result;
+				targets = info.targets ?? [];
+				imageRepository = info.image_repository ?? '';
+				imageTag = info.image_tag ?? '';
+				fillImage();
 			}
 		} catch (error) {
 			console.warn('cannot list provider targets', error);
 			targets = [];
 		} finally {
 			loading = false;
+		}
+	}
+
+	// Fill the image field with the repository the provider expects, but only when
+	// it is empty or still holds what we filled. Never overwrite a typed value.
+	function fillImage() {
+		if (!imageRepository) {
+			return;
+		}
+		if (image === '' || image === filledImage) {
+			filledImage = imageRepository;
+			image = imageRepository;
 		}
 	}
 
@@ -68,6 +95,27 @@
 		return [...counts.entries()]
 			.map(([profile, online]) => ({ profile, online }))
 			.sort((a, b) => a.profile.localeCompare(b.profile));
+	}
+
+	$: selectedNode =
+		selection.startsWith('node:') ? targets.find((node) => node.id === selection.slice(5)) : undefined;
+	$: usingSuggestion = imageRepository !== '' && (image === imageRepository || image === '');
+	$: resolvedImage =
+		usingSuggestion && imageTag
+			? `${imageRepository}:${archPrefix(selectedNode?.arch ?? osArch)}${imageTag}`
+			: '';
+
+	function archPrefix(arch: string | undefined): string {
+		switch ((arch ?? '').toLowerCase()) {
+			case 'aarch64':
+			case 'arm64':
+				return 'arm_';
+			case 'x86_64':
+			case 'amd64':
+				return 'amd_';
+			default:
+				return '';
+		}
 	}
 
 	function staleLabel(value: string): string {
@@ -160,9 +208,15 @@
 				{/each}
 			</optgroup>
 		</select>
-		<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-			Profile picks by load. Node pins. Both need a V-Scheduler grant.
-		</p>
+		{#if resolvedImage}
+			<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+				Image: <code class="font-mono">{resolvedImage}</code>
+			</p>
+		{:else}
+			<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+				Profile picks by load. Node pins. Both need a V-Scheduler grant.
+			</p>
+		{/if}
 	</div>
 {:else if loading}
 	<div class="animate-pulse bg-gray-200 dark:bg-gray-700 h-10 rounded"></div>

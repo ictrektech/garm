@@ -134,6 +134,14 @@ export interface ProviderTarget {
   arch?: string;
 }
 
+// What the pool form needs from a provider: its deployment targets plus the
+// runner image repository and tag those targets expect.
+export interface ProviderTargetInfo {
+  targets?: ProviderTarget[];
+  image_repository?: string;
+  image_tag?: string;
+}
+
 export class GeneratedGarmApiClient {
   private baseUrl: string;
   private token?: string;
@@ -679,13 +687,13 @@ export class GeneratedGarmApiClient {
     return response.data || [];
   }
 
-  // Deployment targets of one provider. An empty answer means the provider does
-  // not publish a target list, so callers hide the picker.
-  async listProviderTargets(provider: string): Promise<ProviderTarget[]> {
+  // Deployment targets of one provider. An empty target list means the provider
+  // does not publish one, so callers hide the picker.
+  async listProviderTargets(provider: string): Promise<ProviderTargetInfo> {
     if (!provider) {
-      return [];
+      return { targets: [] };
     }
-    return await this.requestJSON<ProviderTarget[]>(
+    return await this.requestJSON<ProviderTargetInfo>(
       `/providers/${encodeURIComponent(provider)}/targets`
     );
   }

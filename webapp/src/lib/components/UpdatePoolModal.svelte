@@ -329,6 +329,7 @@
 			<!-- Deployment target, when the provider publishes one -->
 			<ProviderTargetPicker
 				provider={pool.provider_name ?? ''}
+				bind:image
 				bind:extraSpecs
 				bind:osArch
 			/>
