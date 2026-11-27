@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import Modal from './Modal.svelte';
 	import JsonEditor from './JsonEditor.svelte';
+	import ProviderTargetPicker from './ProviderTargetPicker.svelte';
 	import { extractAPIError } from '$lib/utils/apiError';
 	import { eagerCache } from '$lib/stores/eager-cache.js';
 	import { garmApi } from '$lib/api/client.js';
@@ -324,6 +325,13 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- Deployment target, when the provider publishes one -->
+			<ProviderTargetPicker
+				provider={pool.provider_name ?? ''}
+				bind:extraSpecs
+				bind:osArch
+			/>
 
 			<!-- Group 1: Image & OS Configuration -->
 			<div class="space-y-4">

@@ -129,6 +129,17 @@ pool 的 `image` 可以只写仓库（`swr.cn-southwest-2.myhuaweicloud.com/ictr
 
 pool 的 `image` 填 runner 镜像。`flavor` 不使用，填 `container` 即可。
 
+## 面板里选节点
+
+provider 名选中 `vscheduler` 后，池的表单会出现 Deployment Target 下拉。它来自
+garm 的 `GET /api/v1/providers/{provider}/targets`，garm 读本 provider 的配置里的
+`base_url` 与 `token`，再去 V-Scheduler 拉 `/managed-nodes`。
+
+- 选项分两组：按 Profile（交给 V-Scheduler 按负载选节点）和具体节点（`target_id`，钉死一台）。
+- 选具体节点时会把池的 `os_arch` 一起改成该节点架构，避免架构不匹配。
+- 选中结果写进 `extra_specs`，JSON 编辑器里仍可手改。
+- V-Scheduler 不可达或该 provider 没有节点清单时，下拉不显示，表单退回手写 `extra_specs`。
+
 放置规则：在 Profile 命中的在线节点里选存活部署最少的一台。同分时按实例名散列
 选择。
 

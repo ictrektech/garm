@@ -27,6 +27,7 @@ import {
 	type FileObject,
 	type FileObjectPaginatedResponse,
 	type UpdateFileObjectParams,
+	type ProviderTarget,
 } from './generated-client.js';
 
 // Import endpoint and credentials types directly
@@ -68,6 +69,7 @@ export type {
 	FileObject,
 	FileObjectPaginatedResponse,
 	UpdateFileObjectParams,
+	ProviderTarget,
 };
 
 // Legacy APIError type for backward compatibility

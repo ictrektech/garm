@@ -15,6 +15,7 @@
 	import { extractAPIError } from '$lib/utils/apiError';
 	import { getEntityForgeTypeById, getEntityAgentModeById } from '$lib/utils/entity';
 	import JsonEditor from './JsonEditor.svelte';
+	import ProviderTargetPicker from './ProviderTargetPicker.svelte';
 	import { websocketStore, type WebSocketEvent } from '$lib/stores/websocket.js';
 	import UpdateRepositoryModal from './UpdateRepositoryModal.svelte';
 	import UpdateOrganizationModal from './UpdateOrganizationModal.svelte';
@@ -425,6 +426,13 @@
 							{/if}
 						</div>
 					</div>
+
+					<!-- Deployment target, when the provider publishes one -->
+					<ProviderTargetPicker
+						provider={selectedProvider}
+						bind:extraSpecs
+						bind:osArch
+					/>
 				</div>
 
 				<!-- Group 2: Image & OS Configuration -->

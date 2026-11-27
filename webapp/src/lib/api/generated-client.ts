@@ -124,6 +124,16 @@ export interface RecycleTask {
   updated_at: string;
 }
 
+// One compute target an external provider can deploy to. The pool form offers
+// these as a picker so users do not have to write extra_specs by hand.
+export interface ProviderTarget {
+  id: string;
+  name?: string;
+  status?: string;
+  profile?: string;
+  arch?: string;
+}
+
 export class GeneratedGarmApiClient {
   private baseUrl: string;
   private token?: string;
@@ -667,6 +677,17 @@ export class GeneratedGarmApiClient {
   async listProviders(): Promise<Provider[]> {
     const response = await this.providersApi.listProviders();
     return response.data || [];
+  }
+
+  // Deployment targets of one provider. An empty answer means the provider does
+  // not publish a target list, so callers hide the picker.
+  async listProviderTargets(provider: string): Promise<ProviderTarget[]> {
+    if (!provider) {
+      return [];
+    }
+    return await this.requestJSON<ProviderTarget[]>(
+      `/providers/${encodeURIComponent(provider)}/targets`
+    );
   }
 
   // Compatibility aliases
