@@ -13,6 +13,7 @@ GARM 的 VOS 交付定义。
 | `scripts/git-sha.sh` | 生成合法 SemVer 的短 SHA |
 | `scripts/image-ref.sh` | 生成本地镜像引用，带架构前缀 |
 | `scripts/build_image.sh` | 在对应架构的构建机上构建并推送单架构镜像 |
+| `scripts/build_runner_image.sh` | 构建并推送 `garm-runner` 镜像（V-Scheduler 节点上的 runner） |
 | `scripts/package.sh` | 生成 pull 安装包 |
 | `scripts/feishu_sheet.py` | 把镜像 tag 写入 VOS 发布表 |
 | `scripts/release.sh` | 本地发布入口 |
@@ -43,6 +44,34 @@ GARM 的 VOS 交付定义。
 镜像分别使用 `amd_v<版本>` 和 `arm_v<版本>` tag，tag 内的连字符替换为下划线。脚本在推送前检查镜像架构和容器入口。推送成功后将 tag 分别写入飞书发布表 `AMD_with_cuda` 和 `ARM_without_cuda` 的 `garm` 列。写表凭据来自 `~/.feishu.json` 或 `FEISHU_CONFIG_FILE`。
 
 `--no-push` 只构建和验证本机镜像。`--no-feishu` 跳过写表，供单独维护镜像使用。可通过 `APK_MIRROR`、`NPM_REGISTRY`、`GITHUB_PROXY` 调整构建源。
+
+`garm-runner` 镜像不随 garm 发版，单独构建。它只在 `contrib/garm-provider-vscheduler/runner-image/` 或底包版本变化时需要重建，写飞书表由发布流程另行决定。
+
+```bash
+./ictrek.app/scripts/build_runner_image.sh --target arm --version 6.0.1
+```
+
+tag 是 `<amd|arm>_v<底包版本>_<内容哈希8位>`，例如 `arm_v6.0.1_3b01e082`。哈希只覆盖
+`runner-image/Dockerfile`、`runner-image/entrypoint.sh` 与底包引用，仓库里其他代码
+变动不改变 tag。内容未变时脚本直接跳过，所以每次发版都可以无脑跑一遍。
+
+amd 与 arm 两个 tag 都推完后，用 `--latest` 把两者合成多架构 `latest`：
+
+```bash
+./ictrek.app/scripts/build_runner_image.sh --latest --version 6.0.1
+```
+
+构建成功后脚本把 tag 写进飞书表的 `garm-runner` 列，用于登记。`--no-feishu` 跳过写表。
+
+查仓库里已有的 tag：
+
+```bash
+./ictrek.app/scripts/build_runner_image.sh --list
+```
+
+推完后要人工把 garm 池的 `image` 字段改成仓库名（不带 tag）。provider 会按池的
+`os_arch` 补上 `amd_` 或 `arm_` 前缀的 tag。池不要填 `latest`：V-Scheduler 用
+`docker run --pull=never`，节点本地已有同名 tag 就不再拉取。
 
 两种架构的镜像推送并记表后，在本地运行 `./ictrek.app/scripts/release.sh <版本>`。脚本核对本地提交与飞书记录后推送 `vos-garm-v<版本>`。CI 按发布表中的实际镜像引用打包，生成 GitHub Release，并发布到 VOS App Store。VOS 安装时选择与设备匹配的 `amd` 或 `arm` profile。
 
