@@ -282,6 +282,22 @@ definitions:
                 alias: garm_params
                 package: github.com/cloudbase/garm/params
             type: Provider
+    ProviderTarget:
+        type: object
+        x-go-type:
+            import:
+                alias: garm_params
+                package: github.com/cloudbase/garm/params
+            type: ProviderTarget
+    ProviderTargets:
+        items:
+            $ref: '#/definitions/ProviderTarget'
+        type: array
+        x-go-type:
+            import:
+                alias: garm_params
+                package: github.com/cloudbase/garm/params
+            type: ProviderTargets
     Providers:
         items:
             $ref: '#/definitions/Provider'
@@ -1969,6 +1985,23 @@ paths:
                     schema:
                         $ref: '#/definitions/APIErrorResponse'
             summary: List all providers.
+            tags:
+                - providers
+    /providers/{providerName}/targets:
+        get:
+            description: |-
+                List the compute targets an external provider can deploy to. An empty list
+                means the provider does not publish one, or it is currently unreachable.
+            operationId: ListProviderTargets
+            responses:
+                "200":
+                    description: ProviderTargets
+                    schema:
+                        $ref: '#/definitions/ProviderTargets'
+                "400":
+                    description: APIErrorResponse
+                    schema:
+                        $ref: '#/definitions/APIErrorResponse'
             tags:
                 - providers
     /repositories:

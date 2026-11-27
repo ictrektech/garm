@@ -1601,6 +1601,35 @@ definitions:
                 $ref: '#/definitions/ProviderType'
         type: object
         x-go-package: github.com/cloudbase/garm/params
+    ProviderTarget:
+        description: |-
+            ProviderTarget is one compute target an external provider can deploy to. The
+            web UI offers these as a picker so users do not have to write extra_specs by
+            hand.
+        properties:
+            arch:
+                type: string
+                x-go-name: Arch
+            id:
+                type: string
+                x-go-name: ID
+            name:
+                type: string
+                x-go-name: Name
+            profile:
+                type: string
+                x-go-name: Profile
+            status:
+                type: string
+                x-go-name: Status
+        type: object
+        x-go-package: github.com/cloudbase/garm/params
+    ProviderTargets:
+        description: used by swagger client generated code
+        items:
+            $ref: '#/definitions/ProviderTarget'
+        type: array
+        x-go-package: github.com/cloudbase/garm/params
     ProviderType:
         type: string
         x-go-package: github.com/cloudbase/garm/params
@@ -3781,6 +3810,23 @@ paths:
                     schema:
                         $ref: '#/definitions/APIErrorResponse'
             summary: List all providers.
+            tags:
+                - providers
+    /providers/{providerName}/targets:
+        get:
+            description: |-
+                List the compute targets an external provider can deploy to. An empty list
+                means the provider does not publish one, or it is currently unreachable.
+            operationId: ListProviderTargets
+            responses:
+                "200":
+                    description: ProviderTargets
+                    schema:
+                        $ref: '#/definitions/ProviderTargets'
+                "400":
+                    description: APIErrorResponse
+                    schema:
+                        $ref: '#/definitions/APIErrorResponse'
             tags:
                 - providers
     /repositories:

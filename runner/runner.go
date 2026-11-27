@@ -42,6 +42,7 @@ import (
 	"github.com/cloudbase/garm/params"
 	"github.com/cloudbase/garm/runner/common"
 	"github.com/cloudbase/garm/runner/pool"
+	"github.com/cloudbase/garm/runner/providertargets"
 	"github.com/cloudbase/garm/runner/providers"
 	garmUtil "github.com/cloudbase/garm/util"
 	"github.com/cloudbase/garm/util/github"
@@ -370,6 +371,25 @@ func (r *Runner) ListProviders(ctx context.Context) ([]params.Provider, error) {
 		ret = append(ret, val.AsParams())
 	}
 	return ret, nil
+}
+
+// ListProviderTargets returns the compute targets an external provider can
+// deploy to. Providers that do not publish a target list return an empty slice.
+func (r *Runner) ListProviderTargets(ctx context.Context, providerName string) (params.ProviderTargets, error) {
+	if !auth.IsAdmin(ctx) {
+		return nil, runnerErrors.ErrUnauthorized
+	}
+
+	for _, prov := range r.config.Providers {
+		if prov.Name != providerName {
+			continue
+		}
+		if prov.ProviderType != params.ExternalProvider {
+			return params.ProviderTargets{}, nil
+		}
+		return providertargets.List(ctx, prov.External.ConfigFile)
+	}
+	return nil, fmt.Errorf("provider %q is not configured", providerName)
 }
 
 func (r *Runner) loadReposOrgsAndEnterprises() {

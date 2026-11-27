@@ -138,6 +138,8 @@ func (a *api) do(method, path string, body, out any) error {
 	return nil
 }
 
+// garm reads the same answer to fill the pool form picker
+// (runner/providertargets). Change both when the shape changes.
 func (a *api) nodes() ([]node, error) {
 	var data struct {
 		Items []node `json:"items"`

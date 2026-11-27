@@ -1234,6 +1234,21 @@ type Provider struct {
 // swagger:model Providers
 type Providers []Provider
 
+// ProviderTarget is one compute target an external provider can deploy to. The
+// web UI offers these as a picker so users do not have to write extra_specs by
+// hand.
+type ProviderTarget struct {
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Profile string `json:"profile,omitempty"`
+	Arch    string `json:"arch,omitempty"`
+}
+
+// used by swagger client generated code
+// swagger:model ProviderTargets
+type ProviderTargets []ProviderTarget
+
 // swagger:model PoolManagerStatus
 type PoolManagerStatus struct {
 	IsRunning     bool   `json:"running,omitempty"`

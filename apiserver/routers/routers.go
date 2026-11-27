@@ -510,6 +510,8 @@ func NewAPIRouter(han *controllers.APIController, authMiddleware, initMiddleware
 	// Providers
 	apiRouter.Handle("/providers/", http.HandlerFunc(han.ListProviders)).Methods("GET", "OPTIONS")
 	apiRouter.Handle("/providers", http.HandlerFunc(han.ListProviders)).Methods("GET", "OPTIONS")
+	apiRouter.Handle("/providers/{providerName}/targets", http.HandlerFunc(han.ListProviderTargets)).Methods("GET", "OPTIONS")
+	apiRouter.Handle("/providers/{providerName}/targets/", http.HandlerFunc(han.ListProviderTargets)).Methods("GET", "OPTIONS")
 
 	//////////////////////
 	// Github Endpoints //

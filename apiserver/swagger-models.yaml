@@ -98,6 +98,22 @@ definitions:
         import:
             package: github.com/cloudbase/garm/params
             alias: garm_params
+  ProviderTargets:
+    type: array
+    x-go-type:
+        type: ProviderTargets
+        import:
+            package: github.com/cloudbase/garm/params
+            alias: garm_params
+    items:
+        $ref: '#/definitions/ProviderTarget'
+  ProviderTarget:
+    type: object
+    x-go-type:
+        type: ProviderTarget
+        import:
+            package: github.com/cloudbase/garm/params
+            alias: garm_params
   Instances:
     type: array
     x-go-type:

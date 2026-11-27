@@ -475,6 +475,45 @@ func (a *APIController) ListProviders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// swagger:route GET /providers/{providerName}/targets providers ListProviderTargets
+//
+// List the compute targets an external provider can deploy to. An empty list
+// means the provider does not publish one, or it is currently unreachable.
+//
+//	Responses:
+//	  200: ProviderTargets
+//	  400: APIErrorResponse
+func (a *APIController) ListProviderTargets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	providerName, ok := mux.Vars(r)["providerName"]
+	if !ok || providerName == "" {
+		handleError(ctx, w, fmt.Errorf("missing provider name"))
+		return
+	}
+
+	targets, err := a.r.ListProviderTargets(ctx, providerName)
+	switch {
+	case errors.Is(err, gErrors.ErrUnauthorized):
+		handleError(ctx, w, err)
+		return
+	case err != nil:
+		// A broken or unreachable provider must not break the pool form. The
+		// UI hides the picker on an empty answer, and the log keeps it
+		// diagnosable.
+		slog.WarnContext(ctx, "cannot list provider targets", "provider", providerName, "error", err)
+		targets = nil
+	}
+	if targets == nil {
+		targets = runnerParams.ProviderTargets{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(targets); err != nil {
+		slog.With(slog.Any("error", err)).ErrorContext(ctx, "failed to encode response")
+	}
+}
+
 // swagger:route GET /jobs jobs ListJobs
 //
 // List all jobs.
