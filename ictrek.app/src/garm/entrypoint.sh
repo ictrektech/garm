@@ -62,4 +62,38 @@ tls_server_certificate = ""
   skip_verify = false
 EOF
 
+# The V-Scheduler provider is listed whenever its binary ships with the image,
+# so the web UI can store the service token. Once the config file exists it is
+# the source of truth: the UI owns it, and this script only seeds a missing one.
+SCHEDULER_PROVIDER_BIN="/opt/garm/providers.d/garm-provider-vscheduler"
+SCHEDULER_JSON="${CONF_DIR}/garm-provider-vscheduler.json"
+
+if [ -x "${SCHEDULER_PROVIDER_BIN}" ]; then
+	if [ ! -f "${SCHEDULER_JSON}" ]; then
+		(
+			umask 077
+			cat >"${SCHEDULER_JSON}" <<EOF
+{
+  "base_url": "${SCHEDULER_BASE_URL:-http://v-scheduler:38120/api/v1}",
+  "token": "${SCHEDULER_TOKEN:-}",
+  "container_port": ${SCHEDULER_CONTAINER_PORT:-8080},
+  "image_tag": "${GARM_RUNNER_IMAGE_TAG:-}",
+  "image_repository": "${GARM_RUNNER_IMAGE_REPO:-swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm-runner}"
+}
+EOF
+		)
+	fi
+	cat >>"${CONF_DIR}/config.toml" <<EOF
+
+[[provider]]
+  name = "vscheduler"
+  provider_type = "external"
+  description = "V-Scheduler managed nodes"
+  [provider.external]
+    interface_version = "v0.1.1"
+    provider_executable = "${SCHEDULER_PROVIDER_BIN}"
+    config_file = "${SCHEDULER_JSON}"
+EOF
+fi
+
 exec /bin/garm --config "${CONF_DIR}/config.toml"
