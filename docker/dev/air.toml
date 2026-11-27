@@ -12,7 +12,7 @@ tmp_dir = "/tmp/air"
   include_ext = ["go", "tmpl", "html"]
   # 不排除 webapp/assets：前端是 go:embed 进二进制的，make build-webui 之后
   # 改到 index.html 要能触发重编译。node_modules 与 build 必须排除，否则 inotify 爆掉。
-  exclude_dir = ["vendor", "ictrek.app", "docker", "testdata", "test", "bin", "build", "node_modules", "tasks", ".git", ".dev-data", "webapp/node_modules", "webapp/build", "webapp/src", "webapp/static", "webapp/assets/_app"]
+  exclude_dir = ["vendor", "contrib", "ictrek.app", "docker", "testdata", "test", "bin", "build", "node_modules", "tasks", ".git", ".dev-data", "webapp/node_modules", "webapp/build", "webapp/src", "webapp/static", "webapp/assets/_app"]
   delay = 1000
   stop_on_error = true
   send_interrupt = true

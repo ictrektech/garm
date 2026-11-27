@@ -46,6 +46,10 @@ DELVE_PORT="${VOS_DEV_DELVE_PORT:-39097}"
 WEB_ENABLED="${VOS_DEV_WEB:-1}"
 WEB_LOG="${TMPDIR:-/tmp}/garm-vos-dev-web.log"
 WEB_PID=""
+PROVIDER_WATCH_PID=""
+# contrib 下的 provider 直接从源码编译进 ${PROVIDER_DIR}。
+# garm 每次调用 provider 都是 exec 二进制，所以替换文件即生效，不用重启容器。
+LOCAL_PROVIDERS=(garm-provider-vscheduler)
 HOST_GW="${VOS_HOST_GW_IP:-172.17.0.1}"
 # Traefik 回源和 VOS SSO 的 userinfo 都走同一个网关，由 HOST_GW 统一派生。
 # compose 里的默认值只是手动 docker compose 使用时的兜底。
@@ -228,6 +232,47 @@ start_web() {
 	return 1
 }
 
+# contrib 下的 provider：从源码编译到挂载目录，与提取的 lxd 并存。
+build_local_providers() {
+	command -v go >/dev/null || {
+		warn "缺少 go：跳过 contrib provider 编译（池里就看不到它们）"
+		return 0
+	}
+	local name src
+	for name in "${LOCAL_PROVIDERS[@]}"; do
+		src="contrib/${name}"
+		[ -f "${src}/go.mod" ] || continue
+		mkdir -p "$PROVIDER_DIR"
+		log "编译 ${src} → ${PROVIDER_DIR}/${name}"
+		if ! (cd "$src" && GOCACHE="${GOCACHE:-${TMPDIR:-/tmp}/garm-provider-gocache}" go build -o "${ROOT_DIR}/${PROVIDER_DIR}/${name}" .); then
+			warn "${name} 编译失败：容器里仍用上一次的二进制"
+		fi
+	done
+}
+
+watch_local_providers() {
+	local name src
+	while sleep 2; do
+		for name in "${LOCAL_PROVIDERS[@]}"; do
+			src="contrib/${name}"
+			[ -f "${src}/go.mod" ] || continue
+			if [ ! -f "${PROVIDER_DIR}/${name}" ] ||
+				[ -n "$(find "$src" -name '*.go' -newer "${PROVIDER_DIR}/${name}" -print -quit 2>/dev/null)" ]; then
+				log "${name} 源码变化，重新编译"
+				build_local_providers
+			fi
+		done
+	done
+}
+
+stop_provider_watch() {
+	if [ -n "${PROVIDER_WATCH_PID:-}" ] && kill -0 "$PROVIDER_WATCH_PID" 2>/dev/null; then
+		kill "$PROVIDER_WATCH_PID" 2>/dev/null || true
+		wait "$PROVIDER_WATCH_PID" 2>/dev/null || true
+	fi
+	PROVIDER_WATCH_PID=""
+}
+
 stop_web() {
 	if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" 2>/dev/null; then
 		kill "$WEB_PID" 2>/dev/null || true
@@ -247,6 +292,7 @@ cleanup_on_exit() {
 	log "退出联调：撤路由 + 停前端 + 停容器"
 	set +e
 	cmd_route_off
+	stop_provider_watch
 	stop_web
 	compose down
 	return "$rc"
@@ -259,6 +305,7 @@ cmd_up() {
 	ensure_port_free "$DEV_PORT"
 	prepare_provider
 	maybe_add_lxd
+	build_local_providers
 
 	if [ "${VOS_DEV_DEBUG:-0}" = "1" ]; then
 		log "启动 dev 容器（debug 模式：dlv 在 127.0.0.1:${DELVE_PORT}，改代码需手动重启）"
@@ -279,10 +326,14 @@ cmd_up() {
 		WEB_ENABLED=0
 	fi
 
+	watch_local_providers &
+	PROVIDER_WATCH_PID=$!
+
 	cmd_route_on
 
 	log "就绪：在 VOS 平台侧边栏打开 GARM（或刷新平台内 iframe）"
 	log "  改 .go → air 重编译；改 webapp/src/*.svelte → HMR 立即生效"
+	log "  改 contrib/*/[provider] 源码 → 自动重编译，下一次调度即生效"
 	log "  数据目录：${DEV_DATA_DIR:-.dev-data}（sqlite + 渲染后的 config.toml）"
 	if [ "${VOS_DEV_DEBUG:-0}" = "1" ]; then
 		log "  断点：dlv --headless --listen=:${DELVE_PORT} --api-version=2 --accept-multiclient"
@@ -325,6 +376,14 @@ cmd_status() {
 	else
 		echo "  LXD socket 不存在：${LXD_SOCKET}"
 	fi
+	local name
+	for name in "${LOCAL_PROVIDERS[@]}"; do
+		if [ -x "${PROVIDER_DIR}/${name}" ]; then
+			echo "  contrib：${PROVIDER_DIR}/${name}"
+		else
+			echo "  contrib 缺失：${PROVIDER_DIR}/${name}（make vos-dev 会自动编译）"
+		fi
+	done
 	echo "── 前端 dev server :${WEB_PORT} ──"
 	if port_in_use "$WEB_PORT"; then
 		echo "  运行中（改 .svelte 走 HMR，日志 ${WEB_LOG}）"
