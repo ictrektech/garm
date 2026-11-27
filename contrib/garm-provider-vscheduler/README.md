@@ -34,6 +34,10 @@ V-Scheduler 的规则见 `backend/platform/shared/application_backend.rs` 的
 
 `targets` 里必须包含每一个允许落地的节点。新加节点时要重新提交。
 
+漏掉的节点会在创建实例时收到 403，provider 的报错里写 `no local rule matched`，
+并列出该补的 target 与仓库。该实例重试到上限后停在 `error`，授权补上之后需要
+删掉它让池重建，池不会自己复活它。
+
 ## 2. runner 镜像
 
 ```bash

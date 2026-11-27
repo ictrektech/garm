@@ -27,10 +27,26 @@ func explainRejection(err error, req createRequest) error {
 
 	problems := requestProblems(req)
 	if len(problems) == 0 {
-		problems = []string{"no local rule matched; check the app_id deployment grant in V-Scheduler"}
+		problems = []string{grantProblem(req)}
 	}
 	return fmt.Errorf("V-Scheduler rejected the deployment (%d): %s; request: %s",
 		httpErr.status, strings.Join(problems, "; "), body)
+}
+
+// grantProblem explains a 401/403 answer: the app has no deployment grant for
+// this target or repository. V-Scheduler only says "no local rule matched", so
+// print both values the operator has to add.
+func grantProblem(req createRequest) string {
+	repository := req.Image
+	if before, _, found := strings.Cut(repository, "@"); found {
+		repository = before
+	}
+	if idx := strings.LastIndex(repository, ":"); idx > strings.LastIndex(repository, "/") {
+		repository = repository[:idx]
+	}
+	return fmt.Sprintf(
+		"no local rule matched: grant target {kind: %q, id: %q, profile: %q} and repository %q to this app in V-Scheduler",
+		req.Target.Kind, req.Target.ID, req.Target.Profile, repository)
 }
 
 // requestProblems lists the format rules V-Scheduler enforces before it accepts a

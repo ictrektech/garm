@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestImageProblem(t *testing.T) {
 	valid := []string{
@@ -30,6 +33,44 @@ func TestImageProblem(t *testing.T) {
 		if problem == "" {
 			t.Errorf("%s: expected a problem mentioning %q", image, want)
 		}
+	}
+}
+
+func TestGrantProblemNamesTheMissingGrant(t *testing.T) {
+	req := createRequest{
+		Target: target{Kind: "ssh", ID: "01M83P7A", Profile: "jetson-orin"},
+		Image:  "swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm-runner:arm_v6.0.1_27ec9940",
+	}
+	got := grantProblem(req)
+	for _, want := range []string{"01M83P7A", "jetson-orin", "swr.cn-southwest-2.myhuaweicloud.com/ictrek/garm-runner"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("message does not mention %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "27ec9940") {
+		t.Errorf("repository still carries the tag: %s", got)
+	}
+}
+
+func TestGrantProblemStripsDigest(t *testing.T) {
+	req := createRequest{
+		Image: "registry.example.com/ci/runner@sha256:" + strings.Repeat("a", 64),
+	}
+	if got := grantProblem(req); strings.Contains(got, "sha256") {
+		t.Errorf("repository still carries the digest: %s", got)
+	}
+}
+
+func TestExplainRejectionForForbiddenPointsAtTheGrant(t *testing.T) {
+	req := createRequest{
+		RequestKey:    "garm-abc",
+		Target:        target{Kind: "ssh", ID: "node-1", Profile: "jetson-thor"},
+		Image:         "registry.example.com/ci/runner:1",
+		ContainerPort: 8080,
+	}
+	err := explainRejection(&httpError{method: "POST", path: "/backend-deployments", status: 403, body: "forbidden"}, req)
+	if !strings.Contains(err.Error(), "no local rule matched") || !strings.Contains(err.Error(), "node-1") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
