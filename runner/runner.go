@@ -393,6 +393,54 @@ func (r *Runner) ListProviderTargets(ctx context.Context, providerName string) (
 	return params.ProviderTargetInfo{}, fmt.Errorf("provider %q is not configured", providerName)
 }
 
+// GetProviderRunnerConfig reports the runner-facing settings of an external
+// provider. It is admin only because the answer says whether a token is stored.
+func (r *Runner) GetProviderRunnerConfig(ctx context.Context, providerName string) (params.ProviderRunnerConfig, error) {
+	if !auth.IsAdmin(ctx) {
+		return params.ProviderRunnerConfig{}, runnerErrors.ErrUnauthorized
+	}
+	path, err := r.providerConfigFile(providerName)
+	if err != nil {
+		return params.ProviderRunnerConfig{}, err
+	}
+	return providertargets.ReadRunnerConfig(path)
+}
+
+// SetProviderRunnerConfig rewrites the runner-facing settings of an external
+// provider. The provider binary reads the same file on its next invocation, so
+// no restart is needed.
+func (r *Runner) SetProviderRunnerConfig(ctx context.Context, providerName string, input params.UpdateProviderRunnerConfigParams) (params.ProviderRunnerConfig, error) {
+	if !auth.IsAdmin(ctx) {
+		return params.ProviderRunnerConfig{}, runnerErrors.ErrUnauthorized
+	}
+	path, err := r.providerConfigFile(providerName)
+	if err != nil {
+		return params.ProviderRunnerConfig{}, err
+	}
+	cfg, err := providertargets.UpdateRunnerConfig(path, input)
+	var inputErr *providertargets.InputError
+	if errors.As(err, &inputErr) {
+		return params.ProviderRunnerConfig{}, runnerErrors.NewBadRequestError("%s", inputErr)
+	}
+	return cfg, err
+}
+
+func (r *Runner) providerConfigFile(providerName string) (string, error) {
+	for _, prov := range r.config.Providers {
+		if prov.Name != providerName {
+			continue
+		}
+		if prov.ProviderType != params.ExternalProvider {
+			return "", runnerErrors.NewBadRequestError("provider %q is not an external provider", providerName)
+		}
+		if prov.External.ConfigFile == "" {
+			return "", runnerErrors.NewBadRequestError("provider %q has no config file", providerName)
+		}
+		return prov.External.ConfigFile, nil
+	}
+	return "", runnerErrors.ErrNotFound
+}
+
 func (r *Runner) loadReposOrgsAndEnterprises() {
 	r.mux.Lock()
 	defer r.mux.Unlock()

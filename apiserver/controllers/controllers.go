@@ -514,6 +514,78 @@ func (a *APIController) ListProviderTargets(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// swagger:route GET /providers/{providerName}/runner-config providers GetProviderRunnerConfig
+//
+// Read the runner-facing settings of an external provider. The token is never
+// returned; the answer only says whether one is stored.
+//
+//	Responses:
+//	  200: ProviderRunnerConfig
+//	  400: APIErrorResponse
+func (a *APIController) GetProviderRunnerConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	providerName, ok := mux.Vars(r)["providerName"]
+	if !ok || providerName == "" {
+		handleError(ctx, w, gErrors.NewBadRequestError("missing provider name"))
+		return
+	}
+
+	cfg, err := a.r.GetProviderRunnerConfig(ctx, providerName)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(cfg); err != nil {
+		slog.With(slog.Any("error", err)).ErrorContext(ctx, "failed to encode response")
+	}
+}
+
+// swagger:route PUT /providers/{providerName}/runner-config providers SetProviderRunnerConfig
+//
+// Write the runner-facing settings of an external provider. An empty token keeps
+// the stored one. The provider reads the file on its next invocation, so the
+// change applies without a restart.
+//
+//	Parameters:
+//	  + name: Body
+//	    description: Runner settings to write. An empty token keeps the stored one.
+//	    type: UpdateProviderRunnerConfigParams
+//	    in: body
+//
+//	Responses:
+//	  200: ProviderRunnerConfig
+//	  400: APIErrorResponse
+func (a *APIController) SetProviderRunnerConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	providerName, ok := mux.Vars(r)["providerName"]
+	if !ok || providerName == "" {
+		handleError(ctx, w, gErrors.NewBadRequestError("missing provider name"))
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+	var input runnerParams.UpdateProviderRunnerConfigParams
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		handleError(ctx, w, gErrors.NewBadRequestError("invalid request body: %s", err))
+		return
+	}
+
+	cfg, err := a.r.SetProviderRunnerConfig(ctx, providerName, input)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(cfg); err != nil {
+		slog.With(slog.Any("error", err)).ErrorContext(ctx, "failed to encode response")
+	}
+}
+
 // swagger:route GET /jobs jobs ListJobs
 //
 // List all jobs.

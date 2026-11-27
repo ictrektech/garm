@@ -121,6 +121,20 @@ definitions:
         import:
             package: github.com/cloudbase/garm/params
             alias: garm_params
+  ProviderRunnerConfig:
+    type: object
+    x-go-type:
+        type: ProviderRunnerConfig
+        import:
+            package: github.com/cloudbase/garm/params
+            alias: garm_params
+  UpdateProviderRunnerConfigParams:
+    type: object
+    x-go-type:
+        type: UpdateProviderRunnerConfigParams
+        import:
+            package: github.com/cloudbase/garm/params
+            alias: garm_params
   Instances:
     type: array
     x-go-type:

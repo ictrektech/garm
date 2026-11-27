@@ -2012,6 +2012,47 @@ paths:
                         $ref: '#/definitions/APIErrorResponse'
             tags:
                 - providers
+    /providers/{providerName}/runner-config:
+        get:
+            description: |-
+                Read the runner-facing settings of an external provider. The token is never
+                returned; the answer only says whether one is stored.
+            operationId: GetProviderRunnerConfig
+            responses:
+                "200":
+                    description: ProviderRunnerConfig
+                    schema:
+                        $ref: '#/definitions/ProviderRunnerConfig'
+                "400":
+                    description: APIErrorResponse
+                    schema:
+                        $ref: '#/definitions/APIErrorResponse'
+            tags:
+                - providers
+        put:
+            description: |-
+                Write the runner-facing settings of an external provider. An empty token keeps
+                the stored one. The provider reads the file on its next invocation, so the
+                change applies without a restart.
+            operationId: SetProviderRunnerConfig
+            parameters:
+                - name: Body
+                  in: body
+                  description: Runner settings to write. An empty token keeps the stored one.
+                  required: true
+                  schema:
+                    $ref: '#/definitions/UpdateProviderRunnerConfigParams'
+            responses:
+                "200":
+                    description: ProviderRunnerConfig
+                    schema:
+                        $ref: '#/definitions/ProviderRunnerConfig'
+                "400":
+                    description: APIErrorResponse
+                    schema:
+                        $ref: '#/definitions/APIErrorResponse'
+            tags:
+                - providers
     /repositories:
         get:
             operationId: ListRepos
