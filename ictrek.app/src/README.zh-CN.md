@@ -1,5 +1,7 @@
 # GARM
 
+升级时沿用原应用存储，并为旧 `amd` 和 `arm` 分别选择 `amd-cpu` 和 `arm-cpu`。通过 VOS API 升级时显式传入新 `profiles`。回退时选择旧版本对应选项。应用 API 保持一致。
+
 自托管 GitHub Actions 与 Gitea Actions 运行器管理器。
 
 ## 安装

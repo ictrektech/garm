@@ -1,5 +1,7 @@
 # GARM
 
+When upgrading, keep the app storage and select `amd-cpu` for `amd` or `arm-cpu` for `arm`. Supply the new `profiles` explicitly when upgrading over the VOS API. Select the matching old Profile on rollback. Application APIs stay the same.
+
 Self-hosted runner manager for GitHub Actions and Gitea Actions.
 
 ## Install

@@ -34,11 +34,11 @@ x-garm: &garm
 services:
   garm-amd:
     <<: *garm
-    profiles: [amd]
+    profiles: [amd-cpu]
     image: ${GARM_AMD_IMAGE}
   garm-arm:
     <<: *garm
-    profiles: [arm]
+    profiles: [arm-cpu]
     image: ${GARM_ARM_IMAGE}
 
 networks:

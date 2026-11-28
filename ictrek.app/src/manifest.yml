@@ -11,7 +11,7 @@ category: [developer]
 arch: [amd64, arm64]
 require-profiles: true
 profiles:
-  - name: amd
+  - name: amd-cpu
     title:
       zh-CN: AMD64（x86-64）
       en: AMD64 (x86-64)
@@ -20,8 +20,8 @@ profiles:
       en: For AMD64 (x86-64) devices. No GPU required.
     caps:
       arch: amd64
-    conflicts: [arm]
-  - name: arm
+    conflicts: [arm-cpu]
+  - name: arm-cpu
     title:
       zh-CN: ARM64（64 位 ARM）
       en: ARM64 (64-bit ARM)
@@ -30,7 +30,7 @@ profiles:
       en: For ARM64 (64-bit ARM) devices. No GPU required.
     caps:
       arch: arm64
-    conflicts: [amd]
+    conflicts: [amd-cpu]
 icon: icon.png
 
 platform:
